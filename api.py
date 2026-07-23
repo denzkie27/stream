@@ -515,6 +515,12 @@ async def proxy_stream(url: str, referer: str = "https://netfilm.world/"):
             headers={"Content-Disposition": "inline"}
         )
 
+# ---------- WEB UI ----------
+@app.get("/ui", response_class=HTMLResponse)
+async def web_ui():
+    with open("ui.html", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
