@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>MovieBox UI</title>
+    <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b0e14; --card: #13171f; --accent: #ff3d71; --text: #e0e0e0;
+            --muted: #888; --border: rgba(255,255,255,0.08);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 1rem; min-height: 100vh; }
+        .container { max-width: 600px; margin: auto; }
+        header { text-align: center; margin-bottom: 1.5rem; }
+        h1 { font-size: 2rem; background: linear-gradient(135deg, #ff3d71, #3366ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .config { background: var(--card); padding: 0.8rem; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+        .config input { flex: 1; min-width: 200px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); background: #000; color: var(--text); }
+        .config button { padding: 0.6rem 1rem; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-weight: bold; }
+        .search-bar { display: flex; gap: 0.5rem; margin: 1rem 0; }
+        .search-bar input { flex: 1; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+        .search-bar button { padding: 0.8rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-weight: bold; }
+        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .movie-card { background: var(--card); border-radius: 14px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; }
+        .movie-card:active { transform: scale(0.97); }
+        .movie-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
+        .movie-card .info { padding: 0.6rem; font-size: 0.85rem; }
+        .movie-card .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .detail-page { display: none; }
+        .detail-page.active { display: block; }
+        .search-page { display: block; }
+        .search-page.hidden { display: none; }
+        .back-btn { background: none; border: none; color: var(--accent); font-size: 1.2rem; cursor: pointer; margin-bottom: 1rem; padding: 0.3rem 0.6rem; border-radius: 8px; }
+        .back-btn:hover { background: var(--border); }
+        .movie-player-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%;
+            margin: 1rem 0;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+        .movie-player-container video {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+        .play-direct-btn { display: block; background: #28a745; color: #fff; padding: 0.8rem; text-align: center; border-radius: 12px; margin: 1rem 0; font-weight: bold; text-decoration: none; font-size: 1rem; border: none; width: 100%; cursor: pointer; }
+        .unavailable-msg { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 1.5rem; text-align: center; color: var(--muted); margin: 1rem 0; }
+        .episode-selector { display: flex; gap: 0.5rem; margin: 1rem 0; align-items: center; flex-wrap: wrap; }
+        .episode-selector select { padding: 0.5rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; flex: 1; min-width: 100px; }
+        .stream-links a { display: inline-block; margin: 0.3rem 0.5rem 0.3rem 0; padding: 0.5rem 0.8rem; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.8rem; }
+        .loading-text { color: var(--muted); text-align: center; padding: 1rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div id="searchPage" class="search-page">
+        <header><h1>🎬 MovieBox UI</h1></header>
+        <div class="config">
+            <input type="text" id="apiBase" value="http://127.0.0.1:8000" placeholder="API base URL">
+            <button onclick="testConnection()">Test</button>
+        </div>
+        <div id="status">Status: ready</div>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Enter movie or series...">
+            <button id="searchBtn">Search</button>
+        </div>
+        <div id="results" class="grid"></div>
+        <div id="loading" class="loading-text" style="display:none;">Loading...</div>
+    </div>
+
+    <div id="detailPage" class="detail-page">
+        <button id="backBtn" class="back-btn">← Back to search</button>
+        <div id="detailContent"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const apiBaseInput = document.getElementById('apiBase');
+    const statusDiv = document.getElementById('status');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const resultsGrid = document.getElementById('results');
+    const loadingDiv = document.getElementById('loading');
+    const searchPage = document.getElementById('searchPage');
+    const detailPage = document.getElementById('detailPage');
+    const detailContentDiv = document.getElementById('detailContent');
+    const backBtn = document.getElementById('backBtn');
+
+    let currentSubjectId = null;
+    let currentSlug = null;
+    let currentDetailData = null;
+    let dashPlayer = null;
+    let tvVideoElement = null;
+
+    function log(msg) {
+        statusDiv.textContent += '\n' + msg;
+        console.log(msg);
+    }
+
+    function getApiBase() {
+        return apiBaseInput.value.replace(/\/+$/, '');
+    }
+
+    async function fetchJSON(path) {
+        const url = getApiBase() + path;
+        log('Fetching: ' + url);
+        const res = await fetch(url);
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`HTTP ${res.status}: ${text.substring(0, 200)}`);
+        }
+        return res.json();
+    }
+
+    window.testConnection = async function() {
+        try {
+            await fetchJSON('/home');
+            log('✅ Connection successful!');
+        } catch(e) {
+            log('❌ Connection failed: ' + e.message);
+        }
+    };
+
+    async function doSearch() {
+        const q = searchInput.value.trim();
+        if(!q) return;
+        loadingDiv.style.display = 'block';
+        resultsGrid.innerHTML = '';
+        log('Searching: ' + q);
+        try {
+            const data = await fetchJSON('/search?q=' + encodeURIComponent(q));
+            const items = data.items || [];
+            log('Found ' + items.length + ' results.');
+            renderResults(items);
+        } catch(e) {
+            log('Search error: ' + e.message);
+            resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1;">Search failed</div>';
+        }
+        loadingDiv.style.display = 'none';
+    }
+
+    function renderResults(items) {
+        if(!items.length) {
+            resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">Nothing found</div>';
+            return;
+        }
+        resultsGrid.innerHTML = items.map((item) => {
+            const poster = item.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster';
+            return `<div class="movie-card" data-slug="${item.slug||''}" data-subjectid="${item.subject_id||''}">
+                <img src="${poster}" alt="${item.name||''}">
+                <div class="info">
+                    <div class="title">${item.name||'Untitled'}</div>
+                    <div style="font-size:0.75rem; color:var(--muted);">${item.year||''} ${item.rating?'⭐'+item.rating:''}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    resultsGrid.addEventListener('click', (e) => {
+        const card = e.target.closest('.movie-card');
+        if(!card) return;
+        const slug = card.dataset.slug;
+        const subjectId = card.dataset.subjectid;
+        if(!slug || !subjectId) { log('Missing slug or ID.'); return; }
+        navigateToDetail(slug, subjectId);
+    });
+
+    function navigateToDetail(slug, subjectId) {
+        window.location.hash = `#/detail/${slug}`;
+    }
+
+    async function loadDetail(slug, subjectId) {
+        currentSubjectId = subjectId;
+        currentSlug = slug;
+        searchPage.classList.add('hidden');
+        detailPage.classList.add('active');
+        detailContentDiv.innerHTML = '<div class="loading-text">Loading details...</div>';
+        log('Loading detail: ' + slug);
+        try {
+            const detail = await fetchJSON('/detail/' + slug);
+            const stream = await fetchJSON('/api/stream/' + subjectId + '?detail_path=' + slug);
+            currentDetailData = detail.data || detail;
+            log('Detected type: ' + stream.detected_type + ', has_resource: ' + stream.has_resource);
+            renderDetailPage(currentDetailData, stream);
+        } catch(e) {
+            detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error: ' + e.message + '</div>';
+            log('Error: ' + e.message);
+        }
+    }
+
+    function renderDetailPage(detail, stream) {
+        if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
+        if (tvVideoElement) {
+            tvVideoElement.pause();
+            tvVideoElement.removeAttribute('src');
+            tvVideoElement.load();
+            tvVideoElement = null;
+        }
+
+        const title = detail.subject?.title || detail.title || detail.name || 'Unknown';
+        const year = (detail.subject?.releaseDate || detail.releaseDate || '').slice(0,4);
+        const rating = detail.subject?.imdbRatingValue || detail.imdbRatingValue || '';
+        const desc = detail.subject?.description || detail.description || '';
+
+        let html = `<h2>${title} (${year})</h2>`;
+        html += `<div style="color:var(--muted); margin-bottom:1rem;">${rating ? '⭐ ' + rating : ''}</div>`;
+        if(desc) html += `<p>${desc}</p>`;
+
+        if (stream.detected_type === 'movie') {
+            if (stream.dash && stream.dash.length > 0) {
+                html += `<div id="dashPlayerContainer" class="movie-player-container" style="display:none;">
+                    <video id="dashVideoElement" controls></video>
+                </div>`;
+                html += `<button id="playDashBtn" class="play-direct-btn">▶ Play Movie (Ad‑Free)</button>`;
+            } else {
+                html += `<div class="unavailable-msg">
+                    <p>🚫 Stream not available</p>
+                    <p>This movie doesn't have an ad‑free stream right now.</p>
+                </div>`;
+            }
+        }
+
+        if (stream.detected_type === 'tv' && detail.resource?.seasons?.length) {
+            const seasons = detail.resource.seasons;
+            const currentSeason = seasons.find(s => s.se === stream.se) || seasons[0];
+
+            html += '<div class="episode-selector">';
+            html += '<select id="seasonSelect">';
+            seasons.forEach(s => html += `<option value="${s.se}" ${s.se === currentSeason.se ? 'selected' : ''}>Season ${s.se}</option>`);
+            html += '</select>';
+            html += '<select id="episodeSelect">';
+            for (let ep = 1; ep <= currentSeason.maxEp; ep++) html += `<option value="${ep}" ${ep === stream.ep ? 'selected' : ''}>Ep ${ep}</option>`;
+            html += '</select>';
+            html += '</div>';
+
+            html += `<div id="tvPlayerContainer" class="movie-player-container" style="display:none;">
+                <video id="tvVideoElement" controls></video>
+            </div>`;
+        }
+
+        html += '<div id="streamContainer">' + buildStreamLinks(stream) + '</div>';
+        html += `<button id="loadCaptionsBtn" style="margin-top:1rem; background:var(--card); border:1px solid var(--border); padding:0.5rem 1rem; color:white; border-radius:8px;">Load Subtitles</button>`;
+        html += '<div id="captionsList" style="margin-top:1rem;"></div>';
+
+        detailContentDiv.innerHTML = html;
+
+        if (stream.detected_type === 'movie' && stream.dash?.length) {
+            const playBtn = document.getElementById('playDashBtn');
+            const container = document.getElementById('dashPlayerContainer');
+            const video = document.getElementById('dashVideoElement');
+            playBtn.addEventListener('click', () => {
+                if (!dashPlayer) {
+                    dashPlayer = dashjs.MediaPlayer().create();
+                    dashPlayer.initialize(video, stream.dash[0].url, true);
+                } else video.play();
+                container.style.display = 'block';
+                video.play();
+            });
+        }
+
+        if (stream.detected_type === 'tv' && detail.resource?.seasons) {
+            const seasonSelect = document.getElementById('seasonSelect');
+            const episodeSelect = document.getElementById('episodeSelect');
+            const seasons = detail.resource.seasons;
+
+            seasonSelect.addEventListener('change', () => {
+                const selSeason = parseInt(seasonSelect.value);
+                const obj = seasons.find(s => s.se === selSeason);
+                if (obj) {
+                    episodeSelect.innerHTML = '';
+                    for (let ep = 1; ep <= obj.maxEp; ep++) {
+                        episodeSelect.innerHTML += `<option value="${ep}">Ep ${ep}</option>`;
+                    }
+                    loadStreamForEpisode(selSeason, 1);
+                }
+            });
+
+            episodeSelect.addEventListener('change', () => {
+                const se = parseInt(seasonSelect.value);
+                const ep = parseInt(episodeSelect.value);
+                loadStreamForEpisode(se, ep);
+            });
+
+            const initialSe = parseInt(seasonSelect.value);
+            const initialEp = parseInt(episodeSelect.value);
+            loadStreamForEpisode(initialSe, initialEp);
+        }
+
+        document.getElementById('loadCaptionsBtn').addEventListener('click', async () => {
+            const capDiv = document.getElementById('captionsList');
+            capDiv.innerHTML = 'Loading...';
+            try {
+                const data = await fetchJSON('/api/stream/' + currentSubjectId + '/captions?detail_path=' + currentSlug + '&se=' + stream.se + '&ep=' + stream.ep);
+                capDiv.innerHTML = data.count > 0 ? data.captions.map(c => `<div style="margin:0.2rem 0;"><a href="${c.url}" target="_blank">${c.language||'Unknown'} (${c.format||'vtt'})</a></div>`).join('') : 'No captions found.';
+            } catch(e) { capDiv.innerHTML = '<span style="color:#ff6b6b;">Failed: ' + e.message + '</span>'; }
+        });
+    }
+
+    function buildStreamLinks(stream) {
+        let html = '<div class="stream-links"><strong>Direct links:</strong><br>';
+        if(stream.has_resource && stream.sources?.length) {
+            stream.sources.forEach(s => {
+                const sizeMB = (s.size/1e6).toFixed(0);
+                const linkUrl = stream.detected_type === 'tv' ? getApiBase() + '/proxy-stream?url=' + encodeURIComponent(s.url) : s.url;
+                html += `<div style="margin:0.3rem 0; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <a href="${linkUrl}" target="_blank" style="background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; text-decoration:none; font-size:0.8rem;">⬇ ${s.resolution} (${sizeMB}MB)</a>
+                    <a href="${linkUrl}" target="_blank" style="font-size:0.75rem; color:var(--accent);">(open)</a>
+                </div>`;
+            });
+            stream.dash?.forEach(d => html += `<div style="margin:0.3rem 0;"><a href="${d.url}" target="_blank" style="font-size:0.8rem; color:var(--accent);">DASH ${d.resolutions} (${d.codecName})</a></div>`);
+        } else html += '<span style="color:var(--muted);">No stream available.</span>';
+        html += '</div>';
+        return html;
+    }
+
+    async function loadStreamForEpisode(se, ep) {
+        log(`Loading stream for S${se} E${ep}`);
+        try {
+            const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
+
+            const container = document.getElementById('tvPlayerContainer');
+            const video = document.getElementById('tvVideoElement');
+            if (container && video && stream.has_resource && stream.sources.length > 0) {
+                const firstSource = stream.sources[0];
+                const proxyUrl = getApiBase() + '/proxy-stream?url=' + encodeURIComponent(firstSource.url);
+                video.src = proxyUrl;
+                container.style.display = 'block';
+                video.play();
+                tvVideoElement = video;
+            } else if (container) {
+                container.style.display = 'none';
+            }
+
+            const linksContainer = document.getElementById('streamContainer');
+            if (linksContainer) {
+                linksContainer.innerHTML = buildStreamLinks(stream);
+            }
+        } catch(e) {
+            log('Failed to load episode: ' + e.message);
+        }
+    }
+
+    function handleHashChange() {
+        const hash = window.location.hash;
+        if (hash.startsWith('#/detail/')) {
+            const slug = hash.replace('#/detail/', '');
+            (async () => {
+                try {
+                    const detail = await fetchJSON('/detail/' + slug);
+                    const subject = detail.data?.subject || detail.subject;
+                    if (subject && subject.subjectId) {
+                        loadDetail(slug, subject.subjectId);
+                    } else {
+                        detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Invalid movie slug.</div>';
+                        searchPage.classList.add('hidden');
+                        detailPage.classList.add('active');
+                    }
+                } catch(e) {
+                    detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error: ' + e.message + '</div>';
+                    searchPage.classList.add('hidden');
+                    detailPage.classList.add('active');
+                }
+            })();
+        } else {
+            searchPage.classList.remove('hidden');
+            detailPage.classList.remove('active');
+        }
+    }
+
+    window.addEventListener('hashchange', handleHashChange);
+    backBtn.addEventListener('click', () => {
+        window.location.hash = '';
+    });
+
+    if (window.location.hash) {
+        handleHashChange();
+    }
+
+    searchBtn.addEventListener('click', doSearch);
+    searchInput.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter') doSearch();
+    });
+
+    window.onerror = function(m,s,l,c,e) { log('Unhandled error: ' + m + ' at ' + s + ':' + l); };
+    window.onunhandledrejection = function(e) { log('Unhandled rejection: ' + e.reason); };
+    log('Ready. Share URLs like #/detail/slug');
+})();
+</script>
+</body>
+</html>
