@@ -8,9 +8,9 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from bs4 import BeautifulSoup
 
 app = FastAPI(
-    title="MovieBox API Pro",
-    description="Full Pure REST API for moviebox.ph — Zero Scraping",
-    version="2.5.1"
+    title="Stream API",
+    description="Ad‑free streaming API for movies and TV shows",
+    version="1.0.0"
 )
 
 app.add_middleware(
@@ -158,7 +158,7 @@ async def dashboard():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>MovieBox Pure API | Pro Dashboard</title>
+        <title>Stream API | Dashboard</title>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
         <style>
             :root {
@@ -205,7 +205,7 @@ async def dashboard():
         <div class="container">
             <header>
                 <div class="badge">Enterprise API Solution</div>
-                <h1>MovieBox Pro</h1>
+                <h1>Stream</h1>
                 <p style="color: #667; font-size: 1.25rem; font-weight: 300;">State-of-the-Art Pure API Architecture</p>
             </header>
             <div class="grid">
@@ -246,7 +246,7 @@ async def dashboard():
                     <a href="/api/stream/4853423867521549352/captions?detail_path=john-wick-8I2oNTqJwM5" target="_blank" class="btn">Get Subtitles</a>
                 </div>
             </div>
-            <footer><div class="dev-tag">Developer: Walter</div></footer>
+            <footer><div class="dev-tag">Stream API</div></footer>
         </div>
     </body>
     </html>
