@@ -58,6 +58,7 @@
         .loading-text { color: var(--muted); text-align: center; padding: 1rem; }
         .quality-selector { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
         .quality-selector select { padding: 0.4rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+        .error-msg { color: #ff6b6b; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -206,7 +207,11 @@
     }
 
     function renderDetailPage(detail, stream) {
-        if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
+        // Fully destroy any existing player
+        if (dashPlayer) {
+            dashPlayer.destroy();
+            dashPlayer = null;
+        }
         if (tvVideoElement) {
             tvVideoElement.pause();
             tvVideoElement.removeAttribute('src');
@@ -264,6 +269,7 @@
             html += `<div id="tvPlayerContainer" class="movie-player-container" style="display:none;">
                 <video id="tvVideoElement" controls></video>
             </div>`;
+            html += `<div id="tvPlayerError" class="error-msg" style="display:none;"></div>`;
         }
 
         html += '<div id="streamContainer">' + buildStreamLinks(stream) + '</div>';
@@ -356,31 +362,67 @@
         return html;
     }
 
-    // TV episodes now use DASH, just like movies
+    // Reset video element and dash player cleanly
+    function resetPlayer() {
+        if (dashPlayer) {
+            try { dashPlayer.destroy(); } catch(e) {}
+            dashPlayer = null;
+        }
+        const video = document.getElementById('tvVideoElement') || document.getElementById('dashVideoElement');
+        if (video) {
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            // remove any error listeners by replacing node (simple)
+            const newVideo = video.cloneNode(true);
+            video.parentNode.replaceChild(newVideo, video);
+            // re-assign id so later we can find it
+            newVideo.id = video.id;
+            // if it's TV, update tvVideoElement reference
+            if (newVideo.id === 'tvVideoElement') tvVideoElement = newVideo;
+        }
+    }
+
     async function loadStreamForEpisode(se, ep) {
         log(`Loading stream for S${se} E${ep} at ${selectedQuality} (DASH)`);
         const container = document.getElementById('tvPlayerContainer');
-        const video = document.getElementById('tvVideoElement');
-        if (!container || !video) return;
+        const errorDiv = document.getElementById('tvPlayerError');
+        let video = document.getElementById('tvVideoElement');
+
+        if (!container || !video) {
+            log('TV player container or video element not found');
+            return;
+        }
+
+        // Reset everything
+        resetPlayer();
+        // after reset, video may be a new element, get it again
+        video = document.getElementById('tvVideoElement');
+        container.style.display = 'none';
+        if (errorDiv) errorDiv.style.display = 'none';
 
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
             if (!stream.has_resource || stream.dash.length === 0) {
-                container.style.display = 'none';
+                log('No DASH resource for this episode');
                 return;
             }
 
-            if (dashPlayer) {
-                dashPlayer.destroy();
-                dashPlayer = null;
-            }
-
-            // Use DASH proxy URL
             const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
+            log('Proxy DASH URL: ' + proxyUrl);
 
-            // Initialize dash.js
+            // Create fresh dash player
             dashPlayer = dashjs.MediaPlayer().create();
             dashPlayer.initialize(video, proxyUrl, true);
+
+            // Error handling for dash.js
+            dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e) => {
+                log('Dash.js error: ' + JSON.stringify(e.error));
+                if (errorDiv) {
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = 'Playback error. Check console/status for details.';
+                }
+            });
 
             container.style.display = 'block';
             video.play().catch(() => {
@@ -394,6 +436,10 @@
             }
         } catch(e) {
             log('Failed to load episode: ' + e.message);
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Error: ' + e.message;
+            }
         }
     }
 
