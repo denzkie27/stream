@@ -99,7 +99,7 @@
     let currentSubjectId = null;
     let currentSlug = null;
     let currentDetailData = null;
-    let dashPlayer = null;   // used for movies only now
+    let dashPlayer = null;
     let tvVideoElement = null;
     let selectedQuality = '480p';
 
@@ -199,12 +199,13 @@
         }
     }
 
-    function getProxyStreamUrl(se = 0, ep = 0) {
-        return `${getApiBase()}/stream-proxy/${currentSubjectId}?detail_path=${encodeURIComponent(currentSlug)}&quality=${selectedQuality}&se=${se}&ep=${ep}`;
+    function getProxyStreamUrl(se = 0, ep = 0, format = 'auto') {
+        let url = `${getApiBase()}/stream-proxy/${currentSubjectId}?detail_path=${encodeURIComponent(currentSlug)}&quality=${selectedQuality}&se=${se}&ep=${ep}`;
+        if (format !== 'auto') url += `&format=${format}`;
+        return url;
     }
 
     function renderDetailPage(detail, stream) {
-        // Clean up any previous player
         if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
         if (tvVideoElement) {
             tvVideoElement.pause();
@@ -271,7 +272,6 @@
 
         detailContentDiv.innerHTML = html;
 
-        // Quality change handler
         document.getElementById('qualitySelect').addEventListener('change', (e) => {
             selectedQuality = e.target.value;
             if (stream.detected_type === 'movie' && dashPlayer) {
@@ -285,7 +285,6 @@
             }
         });
 
-        // Movie Play button (DASH)
         if (stream.detected_type === 'movie' && (stream.dash?.length || stream.sources?.length)) {
             const playBtn = document.getElementById('playDashBtn');
             const container = document.getElementById('dashPlayerContainer');
@@ -302,7 +301,6 @@
             });
         }
 
-        // TV season / episode selectors
         if (stream.detected_type === 'tv' && detail.resource?.seasons) {
             const seasonSelect = document.getElementById('seasonSelect');
             const episodeSelect = document.getElementById('episodeSelect');
@@ -331,7 +329,6 @@
             loadStreamForEpisode(initialSe, initialEp);
         }
 
-        // Load captions
         document.getElementById('loadCaptionsBtn').addEventListener('click', async () => {
             const capDiv = document.getElementById('captionsList');
             capDiv.innerHTML = 'Loading...';
@@ -359,7 +356,7 @@
         return html;
     }
 
-    // *** TV EPISODE LOADER (prefers MP4, falls back to DASH) ***
+    // TV episode loader – always MP4
     async function loadStreamForEpisode(se, ep) {
         log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
         try {
@@ -373,34 +370,23 @@
                 return;
             }
 
-            // Clean up any existing dash player (movies use dashPlayer, but TV won't)
             if (dashPlayer) {
                 dashPlayer.destroy();
                 dashPlayer = null;
             }
 
-            const proxyUrl = getProxyStreamUrl(se, ep);
+            // Always request MP4 for TV episodes
+            const proxyUrl = getProxyStreamUrl(se, ep, 'mp4');
 
-            // Prefer MP4 sources – the proxy will return MP4 if we set quality to a resolution that exists in sources
-            // and if no DASH is found, the proxy falls back to MP4 anyway.
-            // We will just set the video.src directly; the proxy will serve the correct stream.
             video.src = proxyUrl;
             container.style.display = 'block';
-
-            // Attach error handling: if MP4 fails (e.g., DASH was returned), try dash.js as fallback
-            video.onerror = () => {
-                log('MP4 playback failed, trying DASH fallback...');
-                if (stream.dash && stream.dash.length > 0) {
-                    if (dashPlayer) dashPlayer.destroy();
-                    dashPlayer = dashjs.MediaPlayer().create();
-                    dashPlayer.initialize(video, proxyUrl, true);
-                } else {
-                    log('No DASH fallback available.');
-                }
-            };
-
             video.play();
             tvVideoElement = video;
+
+            video.onerror = () => {
+                log('MP4 playback failed – no fallback available.');
+                container.style.display = 'none';
+            };
 
             const linksContainer = document.getElementById('streamContainer');
             if (linksContainer) {
