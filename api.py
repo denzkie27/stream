@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.1"
+    version="1.0.2"
 )
 
 app.add_middleware(
@@ -226,20 +226,60 @@ async def _get_stream_data(sid: str, slug: str, se: int = 0, ep: int = 0):
 # ---------- DASHBOARD ----------
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
-    # (your existing dashboard HTML – unchanged)
-    html_content = """..."""   # keep your existing HTML
+    # keep your existing dashboard HTML (shortened for space; use the one from your original api.py)
+    html_content = """..."""   # <-- paste your full dashboard HTML here
     return HTMLResponse(content=html_content)
 
 # ---------- HOME ----------
 @app.get("/home")
 async def get_home():
-    # unchanged
-    ...
+    url = f"{API_BASE}/home?host=moviebox.ph"
+    data = await _make_request(url)
+    sections = []
+    for op in data.get("data", {}).get("operatingList", []) or []:
+        op_type = op.get("type")
+        title = op.get("title", "Featured")
+        if op_type == "BANNER":
+            items = [{
+                "name": item.get("title") or (item.get("subject") or {}).get("title"),
+                "poster_url": item.get("image", {}).get("url") or (item.get("subject") or {}).get("cover", {}).get("url"),
+                "slug": item.get("detailPath") or (item.get("subject") or {}).get("detailPath"),
+                "subject_id": (item.get("subject") or {}).get("subjectId"),
+                "badge": (item.get("subject") or {}).get("corner")
+            } for item in op.get("banner", {}).get("items", []) if item.get("title") and "Communities" not in item.get("title")]
+            sections.append({"section": "Banner", "count": len(items), "items": items})
+        elif op_type in ["SUBJECTS_MOVIE", "SUBJECTS_TV", "SUBJECTS_ANIMATION"]:
+            items = [{
+                "name": sub.get("title"),
+                "poster_url": sub.get("cover", {}).get("url"),
+                "slug": sub.get("detailPath"),
+                "subject_id": sub.get("subjectId"),
+                "badge": sub.get("corner"),
+                "rating": sub.get("imdbRatingValue")
+            } for sub in op.get("subjects", [])]
+            sections.append({"section": title, "count": len(items), "items": items})
+    return {"status": "success", "sections": sections}
 
 # ---------- CATEGORIES ----------
 async def _get_category_data(tab_id: int, page: int = 1, per_page: int = 24, sort: str = "RECOMMEND") -> dict:
-    # unchanged
-    ...
+    url = f"{API_BASE}/subject/filter"
+    payload = {"tabId": tab_id, "filter": {"sort": sort, "genre": "ALL", "country": "ALL", "year": "ALL", "language": "ALL"},
+               "page": page, "perPage": per_page}
+    data = await _make_request(url, method="POST", payload=payload)
+    inner = data.get("data", {})
+    raw_items = inner.get("items", inner.get("subjects", []))
+    items = [{
+        "name": sub.get("title"),
+        "poster_url": sub.get("cover", {}).get("url"),
+        "slug": sub.get("detailPath"),
+        "subject_id": sub.get("subjectId"),
+        "badge": sub.get("corner"),
+        "rating": sub.get("imdbRatingValue"),
+        "year": sub.get("releaseDate", "")[:4] if sub.get("releaseDate") else None
+    } for sub in raw_items]
+    pager = inner.get("pager", {})
+    total = pager.get("totalCount") or inner.get("total") or len(items)
+    return {"page": page, "per_page": per_page, "total": total, "items": items}
 
 @app.get("/movies")
 async def get_movies(page: int = 1, sort: str = "RECOMMEND"):
@@ -256,20 +296,86 @@ async def get_animation(page: int = 1, sort: str = "RECOMMEND"):
 # ---------- SEARCH ----------
 @app.get("/search/suggest")
 async def get_search_suggestions(q: str = Query(..., min_length=1)):
-    # unchanged
-    ...
+    url = f"{API_BASE}/subject/search-suggest"
+    data = await _make_request(url, method="POST", payload={"keyword": q, "perPage": 10})
+    inner = data.get("data", {})
+    raw = inner.get("items", inner.get("list", []))
+    suggestions = []
+    for item in raw:
+        sub = item.get("subject") or {}
+        suggestions.append({
+            "title": sub.get("title") or item.get("word") or item.get("title"),
+            "slug": sub.get("detailPath") or item.get("detailPath"),
+            "subject_id": sub.get("subjectId") or item.get("subjectId")
+        })
+    return {"suggestions": suggestions}
 
 @app.get("/search")
 async def search(q: str = Query(..., min_length=1), page: int = 1, per_page: int = 20):
-    # unchanged
-    ...
+    try:
+        search_api_url = f"{API_BASE}/subject/search"
+        data = await _make_request(search_api_url, method="POST", payload={"keyword": q, "page": page, "perPage": per_page})
+        inner = data.get("data", {})
+        raw_items = inner.get("items", inner.get("subjects", []))
+        total = inner.get("total", len(raw_items))
+        items = [{
+            "name": sub.get("title"),
+            "slug": sub.get("detailPath"),
+            "poster_url": sub.get("cover", {}).get("url") if sub.get("cover") else None,
+            "subject_id": sub.get("subjectId"),
+            "rating": sub.get("imdbRatingValue"),
+            "year": (sub.get("releaseDate", "") or "")[:4]
+        } for sub in raw_items]
+        return {"query": q, "page": page, "per_page": per_page, "total": total, "items": items, "source": "api"}
+    except HTTPException:
+        pass
+
+    # Fallback scraping
+    search_url = f"https://moviebox.ph/search?q={q.replace(' ', '+')}&page={page}"
+    async with httpx.AsyncClient(follow_redirects=True, timeout=REQUEST_TIMEOUT) as client:
+        headers = {
+            **DEFAULT_HEADERS,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        resp = await client.get(search_url, headers=headers)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Search page returned {resp.status_code}.")
+        html = resp.text
+
+    soup = BeautifulSoup(html, 'html.parser')
+    items = []
+    for a in soup.find_all('a', href=re.compile(r'^/detail/')):
+        slug = a['href'].replace('/detail/', '')
+        title_tag = a.find(['h3', 'span', 'p'], class_=re.compile(r'title|name', re.I))
+        title = title_tag.get_text(strip=True) if title_tag else a.get_text(strip=True)
+        title = re.sub(r'^[^a-zA-Z0-9]+', '', title)
+        img = a.find('img')
+        poster = img.get('src') if img else None
+        if title and slug:
+            items.append({"name": title, "slug": slug, "poster_url": poster, "subject_id": None})
+
+    seen = set()
+    unique_items = []
+    for item in items:
+        if item['slug'] not in seen:
+            seen.add(item['slug'])
+            unique_items.append(item)
+
+    total_span = soup.find(['span', 'div'], string=re.compile(r'\d+ results?'))
+    total = len(unique_items)
+    if total_span:
+        m = re.search(r'(\d[\d,]*)', total_span.get_text())
+        if m:
+            total = int(m.group(1).replace(',', ''))
+
+    return {"query": q, "page": page, "per_page": len(unique_items), "total": total, "items": unique_items, "source": "scraping"}
 
 # ---------- DETAIL ----------
 @app.get("/detail/{slug}")
 async def get_movie_detail(slug: str):
     return await _make_request(f"{API_BASE}/detail?detailPath={slug}")
 
-# ---------- STREAM INFO (unchanged) ----------
+# ---------- STREAM INFO ----------
 @app.get("/api/stream/{subject_id}")
 async def get_stream_sources(
     subject_id: str,
@@ -277,15 +383,98 @@ async def get_stream_sources(
     se: int = Query(None),
     ep: int = Query(None)
 ):
-    # leave as is or update to use _get_stream_data if you want
-    ...
+    content_type = await _get_content_type(detail_path)
+    if se is None:
+        se = 1 if content_type == "tv" else 0
+    if ep is None:
+        ep = 1 if content_type == "tv" else 0
 
-# ---------- CAPTIONS (unchanged) ----------
+    domain = await _get_player_domain()
+    type_path = {"movie": "movies", "tv": "tv", "animation": "animation"}.get(content_type, "movies")
+    player_referer = (
+        f"{domain}/spa/videoPlayPage/{type_path}/{detail_path}"
+        f"?id={subject_id}&type=/{content_type}/detail&detailSe={se}&detailEp={ep}&lang=en"
+    )
+    play_url = f"{API_BASE}/subject/play?subjectId={subject_id}&se={se}&ep={ep}&detailPath={detail_path}&host=moviebox.ph"
+
+    try:
+        raw_json = await _make_request(play_url, custom_headers={"Referer": player_referer, "X-Source": "moviebox.ph"})
+    except HTTPException as e:
+        return {"subject_id": subject_id, "se": se, "ep": ep, "has_resource": False, "note": "Failed to fetch play data.", "debug_error": e.detail}
+
+    data = raw_json.get("data", {})
+    has_resource = data.get("hasResource", False)
+    streams = [{
+        "resolution": (f"{s.get('resolutions')}p" if s.get('resolutions', '').isdigit() else s.get('resolutions')),
+        "format": s.get("format"),
+        "url": s.get("url"),
+        "size": s.get("size"),
+        "duration": s.get("duration"),
+        "codec": s.get("codecName")
+    } for s in data.get("streams", [])]
+
+    return {
+        "subject_id": subject_id,
+        "se": se, "ep": ep,
+        "has_resource": has_resource,
+        "sources": streams,
+        "hls": data.get("hls", []),
+        "dash": data.get("dash", []),
+        "free_episodes": data.get("freeNum"),
+        "limited": data.get("limited", False),
+        "note": None if has_resource else "No stream found for this episode.",
+        "player_page": player_referer,
+        "detected_type": content_type
+    }
+
+# ---------- CAPTIONS ----------
 @app.get("/api/stream/{subject_id}/captions")
-async def get_captions(...):
-    ...
+async def get_captions(
+    subject_id: str,
+    detail_path: str,
+    se: int = Query(None),
+    ep: int = Query(None)
+):
+    content_type = await _get_content_type(detail_path)
+    if se is None:
+        se = 1 if content_type == "tv" else 0
+    if ep is None:
+        ep = 1 if content_type == "tv" else 0
 
-# ---------- NEW: STREAM PROXY (the actual working player) ----------
+    domain = await _get_player_domain()
+    type_path = {"movie": "movies", "tv": "tv", "animation": "animation"}.get(content_type, "movies")
+    player_referer = (
+        f"{domain}/spa/videoPlayPage/{type_path}/{detail_path}"
+        f"?id={subject_id}&type=/{content_type}/detail&detailSe={se}&detailEp={ep}&lang=en"
+    )
+    play_url = f"{API_BASE}/subject/play?subjectId={subject_id}&se={se}&ep={ep}&detailPath={detail_path}&host=moviebox.ph"
+
+    try:
+        play_raw = await _make_request(play_url, custom_headers={"Referer": player_referer, "X-Source": "moviebox.ph"})
+    except HTTPException as e:
+        return {"subject_id": subject_id, "se": se, "ep": ep, "count": 0, "captions": [], "error": e.detail}
+
+    play_data = play_raw.get("data", {})
+    streams = play_data.get("streams", [])
+    dash = play_data.get("dash", [])
+    stream_id = None
+    stream_format = None
+    if streams:
+        stream_id = streams[0].get("id")
+        stream_format = streams[0].get("format", "MP4")
+    elif dash:
+        stream_id = dash[0].get("id")
+        stream_format = dash[0].get("format", "DASH")
+    if not stream_id:
+        return {"subject_id": subject_id, "se": se, "ep": ep, "count": 0, "captions": []}
+
+    cap_url = f"{API_BASE}/subject/caption?format={stream_format}&id={stream_id}&subjectId={subject_id}&detailPath={detail_path}"
+    data = await _make_request(cap_url)
+    inner = data.get("data", {})
+    captions = inner.get("captions", []) if isinstance(inner, dict) else inner
+    return {"subject_id": subject_id, "se": se, "ep": ep, "count": len(captions), "captions": captions}
+
+# ---------- STREAM PROXY (the working player) ----------
 @app.get("/stream-proxy/{subject_id}")
 async def stream_proxy(
     subject_id: str,
@@ -354,7 +543,7 @@ async def stream_proxy(
     except Exception as e:
         raise HTTPException(500, f"Stream proxy error: {str(e)}")
 
-# ---------- WEB UI (unchanged) ----------
+# ---------- WEB UI ----------
 @app.get("/stream", response_class=HTMLResponse)
 async def web_ui():
     with open("stream.html", encoding="utf-8") as f:
