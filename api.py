@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.3"
+    version="1.0.4"
 )
 
 app.add_middleware(
@@ -477,7 +477,7 @@ async def search(q: str = Query(..., min_length=1), page: int = 1, per_page: int
 async def get_movie_detail(slug: str):
     return await _make_request(f"{API_BASE}/detail?detailPath={slug}")
 
-# ---------- STREAM INFO ----------
+# ---------- STREAM INFO (uses _get_stream_data) ----------
 @app.get("/api/stream/{subject_id}")
 async def get_stream_sources(
     subject_id: str,
@@ -491,28 +491,9 @@ async def get_stream_sources(
     if ep is None:
         ep = 1 if content_type == "tv" else 0
 
-    domain = await _get_player_domain()
-    # Always use "movies" in referer path – upstream requires it
-    player_referer = (
-        f"{domain}/spa/videoPlayPage/movies/{detail_path}"
-        f"?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
-    )
-    play_url = f"{API_BASE}/subject/play?subjectId={subject_id}&se={se}&ep={ep}&detailPath={detail_path}&host=moviebox.ph"
+    # Use the proven multi‑domain fetcher
+    data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
 
-    try:
-        raw_json = await _make_request(play_url, custom_headers={"Referer": player_referer, "X-Source": "moviebox.ph"})
-    except HTTPException as e:
-        return {
-            "subject_id": subject_id,
-            "se": se,
-            "ep": ep,
-            "has_resource": False,
-            "note": "Failed to fetch play data.",
-            "debug_error": e.detail,
-            "detected_type": content_type
-        }
-
-    data = raw_json.get("data", {})
     has_resource = data.get("hasResource", False)
     streams = [{
         "resolution": (f"{s.get('resolutions')}p" if s.get('resolutions', '').isdigit() else s.get('resolutions')),
@@ -533,7 +514,7 @@ async def get_stream_sources(
         "free_episodes": data.get("freeNum"),
         "limited": data.get("limited", False),
         "note": None if has_resource else "No stream found for this episode.",
-        "player_page": player_referer,
+        "player_page": ref,
         "detected_type": content_type
     }
 
@@ -551,21 +532,10 @@ async def get_captions(
     if ep is None:
         ep = 1 if content_type == "tv" else 0
 
-    domain = await _get_player_domain()
-    player_referer = (
-        f"{domain}/spa/videoPlayPage/movies/{detail_path}"
-        f"?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
-    )
-    play_url = f"{API_BASE}/subject/play?subjectId={subject_id}&se={se}&ep={ep}&detailPath={detail_path}&host=moviebox.ph"
-
-    try:
-        play_raw = await _make_request(play_url, custom_headers={"Referer": player_referer, "X-Source": "moviebox.ph"})
-    except HTTPException as e:
-        return {"subject_id": subject_id, "se": se, "ep": ep, "count": 0, "captions": [], "error": e.detail}
-
-    play_data = play_raw.get("data", {})
-    streams = play_data.get("streams", [])
-    dash = play_data.get("dash", [])
+    # Use the same _get_stream_data to obtain valid stream IDs
+    data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
+    streams = data.get("streams", [])
+    dash = data.get("dash", [])
     stream_id = None
     stream_format = None
     if streams:
@@ -578,8 +548,8 @@ async def get_captions(
         return {"subject_id": subject_id, "se": se, "ep": ep, "count": 0, "captions": []}
 
     cap_url = f"{API_BASE}/subject/caption?format={stream_format}&id={stream_id}&subjectId={subject_id}&detailPath={detail_path}"
-    data = await _make_request(cap_url)
-    inner = data.get("data", {})
+    cap_data = await _make_request(cap_url)
+    inner = cap_data.get("data", {})
     captions = inner.get("captions", []) if isinstance(inner, dict) else inner
     return {"subject_id": subject_id, "se": se, "ep": ep, "count": len(captions), "captions": captions}
 
