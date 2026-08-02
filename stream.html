@@ -354,6 +354,7 @@
         return html;
     }
 
+    // *** UPDATED FUNCTION ***
     async function loadStreamForEpisode(se, ep) {
         log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
         try {
@@ -362,7 +363,21 @@
             const video = document.getElementById('tvVideoElement');
             if (container && video && stream.has_resource && (stream.sources.length > 0 || stream.dash.length > 0)) {
                 const proxyUrl = getProxyStreamUrl(se, ep);
-                video.src = proxyUrl;
+
+                // Destroy any existing dash player
+                if (dashPlayer) {
+                    dashPlayer.destroy();
+                    dashPlayer = null;
+                }
+
+                // Use dash.js if DASH is available, otherwise direct MP4
+                if (stream.dash && stream.dash.length > 0) {
+                    dashPlayer = dashjs.MediaPlayer().create();
+                    dashPlayer.initialize(video, proxyUrl, true);
+                } else {
+                    video.src = proxyUrl;
+                }
+
                 container.style.display = 'block';
                 video.play();
                 tvVideoElement = video;
