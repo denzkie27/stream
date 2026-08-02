@@ -5,13 +5,13 @@ import asyncio
 import time
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, Response
 from bs4 import BeautifulSoup
 
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.2"
+    version="1.0.3"
 )
 
 app.add_middleware(
@@ -226,9 +226,111 @@ async def _get_stream_data(sid: str, slug: str, se: int = 0, ep: int = 0):
 # ---------- DASHBOARD ----------
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
-    # keep your existing dashboard HTML (shortened for space; use the one from your original api.py)
-    html_content = """..."""   # <-- paste your full dashboard HTML here
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Stream API | Dashboard</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --primary: #ff3d71;
+                --secondary: #3366ff;
+                --accent: #00f2ff;
+                --bg: #07080c;
+                --card-bg: rgba(255, 255, 255, 0.03);
+                --glass: rgba(255, 255, 255, 0.06);
+                --text: #ffffff;
+            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                font-family: 'Outfit', sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                overflow-x: hidden;
+                min-height: 100vh;
+                background-image: 
+                    radial-gradient(circle at 10% 10%, rgba(255, 61, 113, 0.12) 0%, transparent 40%),
+                    radial-gradient(circle at 90% 90%, rgba(51, 102, 255, 0.12) 0%, transparent 40%);
+            }
+            .container { max-width: 1200px; margin: 0 auto; padding: 60px 24px; }
+            header { text-align: center; margin-bottom: 80px; animation: fadeInDown 1s ease-out; }
+            @keyframes fadeInDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+            h1 { font-size: clamp(2.5rem, 8vw, 4rem); font-weight: 800; background: linear-gradient(135deg, #fff 0%, #aaa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 15px; letter-spacing: -2px; }
+            .badge { background: linear-gradient(90deg, var(--primary), var(--secondary)); padding: 8px 18px; border-radius: 40px; font-size: 0.85rem; font-weight: 700; display: inline-block; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 10px 30px rgba(255, 61, 113, 0.3); }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 30px; margin-top: 20px; }
+            .card { background: var(--card-bg); border: 1px solid var(--glass); border-radius: 28px; padding: 35px; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(12px); }
+            .card:hover { transform: translateY(-12px) scale(1.02); border-color: rgba(255,255,255,0.2); box-shadow: 0 30px 60px rgba(0,0,0,0.5); }
+            .card-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
+            .card-title i { width: 32px; height: 32px; background: rgba(255,255,255,0.05); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; color: var(--accent); font-style: normal; }
+            .card-desc { color: #9ea3ac; font-size: 1rem; line-height: 1.6; margin-bottom: 25px; }
+            .endpoint { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.4); padding: 14px; border-radius: 14px; font-size: 0.85rem; color: var(--accent); border: 1px solid rgba(0,242,255,0.15); margin-bottom: 25px; word-break: break-all; position: relative; }
+            .endpoint::after { content: 'GET'; position: absolute; right: 14px; top: 14px; font-size: 0.65rem; font-weight: 800; color: rgba(255,255,255,0.3); }
+            .btn { display: flex; align-items: center; justify-content: center; padding: 16px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 16px; font-weight: 700; font-size: 0.95rem; transition: all 0.3s; }
+            .btn:hover { background: var(--primary); color: #fff; transform: translateY(-2px); box-shadow: 0 10px 25px rgba(255, 61, 113, 0.4); }
+            footer { text-align: center; padding: 80px 0 40px; }
+            .dev-tag { font-weight: 800; color: #666; letter-spacing: 3px; text-transform: uppercase; font-size: 0.75rem; border: 1px solid #222; padding: 12px 30px; border-radius: 50px; display: inline-block; background: rgba(255,255,255,0.01); }
+            .dev-tag:hover { color: var(--text); border-color: var(--primary); letter-spacing: 5px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <div class="badge">Enterprise API Solution</div>
+                <h1>Stream</h1>
+                <p style="color: #667; font-size: 1.25rem; font-weight: 300;">State-of-the-Art Pure API Architecture</p>
+            </header>
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title"><i>🏠</i> Discover Home</div>
+                    <p class="card-desc">Trending, banners, and recommendations.</p>
+                    <div class="endpoint">/home</div>
+                    <a href="/home" target="_blank" class="btn">Launch API</a>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i>🔍</i> Smart Search</div>
+                    <p class="card-desc">API-powered search with poster & metadata.</p>
+                    <div class="endpoint">/search?q=John+Wick</div>
+                    <a href="/search?q=John+Wick" target="_blank" class="btn">Test Search</a>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i>🆔</i> Metadata A-Z</div>
+                    <p class="card-desc">Full detail including seasons, episodes, cast.</p>
+                    <div class="endpoint">/detail/{slug}</div>
+                    <a href="/detail/john-wick-8I2oNTqJwM5" target="_blank" class="btn">Fetch Specs</a>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i>🎬</i> Stream Engine</div>
+                    <p class="card-desc">Auto-detects movie/TV and serves MP4 & DASH.</p>
+                    <div class="endpoint">/api/stream/{subject_id}</div>
+                    <a href="/api/stream/4853423867521549352?detail_path=john-wick-8I2oNTqJwM5" target="_blank" class="btn">Get Player Link</a>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i>📦</i> Catalog Filters</div>
+                    <p class="card-desc">Movies, TV series, animation – paginated.</p>
+                    <div class="endpoint">/tv-series?page=1</div>
+                    <a href="/tv-series" target="_blank" class="btn">Browse TV</a>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i>💬</i> Subtitle Suite</div>
+                    <p class="card-desc">SRT/VTT subtitles for any episode.</p>
+                    <div class="endpoint">/api/stream/{id}/captions</div>
+                    <a href="/api/stream/4853423867521549352/captions?detail_path=john-wick-8I2oNTqJwM5" target="_blank" class="btn">Get Subtitles</a>
+                </div>
+            </div>
+            <footer><div class="dev-tag">Stream API</div></footer>
+        </div>
+    </body>
+    </html>
+    """
     return HTMLResponse(content=html_content)
+
+# Silent HEAD requests on root
+@app.api_route("/", methods=["HEAD"])
+async def head_root():
+    return Response(status_code=200)
 
 # ---------- HOME ----------
 @app.get("/home")
@@ -390,17 +492,25 @@ async def get_stream_sources(
         ep = 1 if content_type == "tv" else 0
 
     domain = await _get_player_domain()
-    type_path = {"movie": "movies", "tv": "tv", "animation": "animation"}.get(content_type, "movies")
+    # Always use "movies" in referer path – upstream requires it
     player_referer = (
-        f"{domain}/spa/videoPlayPage/{type_path}/{detail_path}"
-        f"?id={subject_id}&type=/{content_type}/detail&detailSe={se}&detailEp={ep}&lang=en"
+        f"{domain}/spa/videoPlayPage/movies/{detail_path}"
+        f"?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
     )
     play_url = f"{API_BASE}/subject/play?subjectId={subject_id}&se={se}&ep={ep}&detailPath={detail_path}&host=moviebox.ph"
 
     try:
         raw_json = await _make_request(play_url, custom_headers={"Referer": player_referer, "X-Source": "moviebox.ph"})
     except HTTPException as e:
-        return {"subject_id": subject_id, "se": se, "ep": ep, "has_resource": False, "note": "Failed to fetch play data.", "debug_error": e.detail}
+        return {
+            "subject_id": subject_id,
+            "se": se,
+            "ep": ep,
+            "has_resource": False,
+            "note": "Failed to fetch play data.",
+            "debug_error": e.detail,
+            "detected_type": content_type
+        }
 
     data = raw_json.get("data", {})
     has_resource = data.get("hasResource", False)
@@ -442,10 +552,9 @@ async def get_captions(
         ep = 1 if content_type == "tv" else 0
 
     domain = await _get_player_domain()
-    type_path = {"movie": "movies", "tv": "tv", "animation": "animation"}.get(content_type, "movies")
     player_referer = (
-        f"{domain}/spa/videoPlayPage/{type_path}/{detail_path}"
-        f"?id={subject_id}&type=/{content_type}/detail&detailSe={se}&detailEp={ep}&lang=en"
+        f"{domain}/spa/videoPlayPage/movies/{detail_path}"
+        f"?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
     )
     play_url = f"{API_BASE}/subject/play?subjectId={subject_id}&se={se}&ep={ep}&detailPath={detail_path}&host=moviebox.ph"
 
@@ -474,7 +583,7 @@ async def get_captions(
     captions = inner.get("captions", []) if isinstance(inner, dict) else inner
     return {"subject_id": subject_id, "se": se, "ep": ep, "count": len(captions), "captions": captions}
 
-# ---------- STREAM PROXY (the working player) ----------
+# ---------- STREAM PROXY ----------
 @app.get("/stream-proxy/{subject_id}")
 async def stream_proxy(
     subject_id: str,
@@ -483,14 +592,10 @@ async def stream_proxy(
     se: int = 0,
     ep: int = 0
 ):
-    """
-    Proxies the actual video stream (DASH first, then MP4)
-    with the correct Referer / Origin headers.
-    """
     try:
         data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
 
-        # --- DASH (proxy with full referer) ---
+        # DASH first
         dash_sources = data.get("dash", [])
         if dash_sources:
             q = quality.replace("p", "")
@@ -513,7 +618,7 @@ async def stream_proxy(
                                 yield chunk
                 return StreamingResponse(gen_dash(), media_type="application/dash+xml")
 
-        # --- MP4 (proxy with full referer) ---
+        # MP4 fallback
         mp4_streams = data.get("streams", [])
         if mp4_streams:
             q = quality.replace("p", "")
