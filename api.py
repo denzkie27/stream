@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.4"
+    version="1.0.5"
 )
 
 app.add_middleware(
@@ -491,7 +491,6 @@ async def get_stream_sources(
     if ep is None:
         ep = 1 if content_type == "tv" else 0
 
-    # Use the proven multi‑domain fetcher
     data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
 
     has_resource = data.get("hasResource", False)
@@ -532,7 +531,6 @@ async def get_captions(
     if ep is None:
         ep = 1 if content_type == "tv" else 0
 
-    # Use the same _get_stream_data to obtain valid stream IDs
     data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
     streams = data.get("streams", [])
     dash = data.get("dash", [])
@@ -553,49 +551,71 @@ async def get_captions(
     captions = inner.get("captions", []) if isinstance(inner, dict) else inner
     return {"subject_id": subject_id, "se": se, "ep": ep, "count": len(captions), "captions": captions}
 
-# ---------- STREAM PROXY ----------
+# ---------- STREAM PROXY (supports format=mp4/dash/auto) ----------
 @app.get("/stream-proxy/{subject_id}")
 async def stream_proxy(
     subject_id: str,
     detail_path: str,
     quality: str = "480p",
     se: int = 0,
-    ep: int = 0
+    ep: int = 0,
+    format: str = "auto"
 ):
     try:
         data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
 
-        # DASH first
-        dash_sources = data.get("dash", [])
-        if dash_sources:
+        # --- MP4 only ---
+        if format == "mp4":
+            mp4_streams = data.get("streams", [])
+            if not mp4_streams:
+                raise HTTPException(404, "No MP4 streams available")
             q = quality.replace("p", "")
-            sel = next(
-                (s for s in dash_sources if q in str(s.get("resolutions", ""))),
-                dash_sources[-1]
-            )
-            dash_url = sel.get("url")
-            if dash_url:
-                async def gen_dash():
-                    cdn_headers = {
-                        "User-Agent": PLAYER_HEADERS["User-Agent"],
-                        "Accept": "*/*",
-                        "Referer": ref,
-                        "Origin": domain,
-                    }
-                    async with httpx.AsyncClient(follow_redirects=True, timeout=300, verify=False) as c:
-                        async with c.stream("GET", dash_url, headers=cdn_headers) as r2:
-                            async for chunk in r2.aiter_bytes(1048576):
-                                yield chunk
-                return StreamingResponse(gen_dash(), media_type="application/dash+xml")
+            sel = next((s for s in mp4_streams if s.get("resolutions") == q), mp4_streams[-1])
+            mp4_url = sel.get("url")
+            if not mp4_url:
+                raise HTTPException(404, "No MP4 URL found")
+            async def gen_mp4():
+                cdn_headers = {
+                    "User-Agent": PLAYER_HEADERS["User-Agent"],
+                    "Accept": "*/*",
+                    "Referer": ref,
+                    "Origin": domain,
+                }
+                async with httpx.AsyncClient(follow_redirects=True, timeout=300, verify=False) as c:
+                    async with c.stream("GET", mp4_url, headers=cdn_headers) as r2:
+                        async for chunk in r2.aiter_bytes(1048576):
+                            yield chunk
+            return StreamingResponse(gen_mp4(), media_type="video/mp4")
 
-        # MP4 fallback
+        # --- DASH (auto or dash) ---
+        if format in ("dash", "auto"):
+            dash_sources = data.get("dash", [])
+            if dash_sources:
+                q = quality.replace("p", "")
+                sel = next(
+                    (s for s in dash_sources if q in str(s.get("resolutions", ""))),
+                    dash_sources[-1]
+                )
+                dash_url = sel.get("url")
+                if dash_url:
+                    async def gen_dash():
+                        cdn_headers = {
+                            "User-Agent": PLAYER_HEADERS["User-Agent"],
+                            "Accept": "*/*",
+                            "Referer": ref,
+                            "Origin": domain,
+                        }
+                        async with httpx.AsyncClient(follow_redirects=True, timeout=300, verify=False) as c:
+                            async with c.stream("GET", dash_url, headers=cdn_headers) as r2:
+                                async for chunk in r2.aiter_bytes(1048576):
+                                    yield chunk
+                    return StreamingResponse(gen_dash(), media_type="application/dash+xml")
+
+        # Fallback to MP4 (auto mode)
         mp4_streams = data.get("streams", [])
         if mp4_streams:
             q = quality.replace("p", "")
-            sel = next(
-                (s for s in mp4_streams if s.get("resolutions") == q),
-                mp4_streams[-1]
-            )
+            sel = next((s for s in mp4_streams if s.get("resolutions") == q), mp4_streams[-1])
             mp4_url = sel.get("url")
             if mp4_url:
                 async def gen_mp4():
