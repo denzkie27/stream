@@ -56,6 +56,8 @@
         .episode-selector select { padding: 0.5rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; flex: 1; min-width: 100px; }
         .stream-links a { display: inline-block; margin: 0.3rem 0.5rem 0.3rem 0; padding: 0.5rem 0.8rem; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.8rem; }
         .loading-text { color: var(--muted); text-align: center; padding: 1rem; }
+        .quality-selector { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
+        .quality-selector select { padding: 0.4rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
     </style>
 </head>
 <body>
@@ -99,6 +101,7 @@
     let currentDetailData = null;
     let dashPlayer = null;
     let tvVideoElement = null;
+    let selectedQuality = '480p';   // default quality
 
     function log(msg) {
         statusDiv.textContent += '\n' + msg;
@@ -196,7 +199,13 @@
         }
     }
 
+    function getProxyStreamUrl(se = 0, ep = 0) {
+        // Build the secure proxy URL for the current subject
+        return `${getApiBase()}/stream-proxy/${currentSubjectId}?detail_path=${encodeURIComponent(currentSlug)}&quality=${selectedQuality}&se=${se}&ep=${ep}`;
+    }
+
     function renderDetailPage(detail, stream) {
+        // Clean up previous player
         if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
         if (tvVideoElement) {
             tvVideoElement.pause();
@@ -214,8 +223,20 @@
         html += `<div style="color:var(--muted); margin-bottom:1rem;">${rating ? '⭐ ' + rating : ''}</div>`;
         if(desc) html += `<p>${desc}</p>`;
 
+        // Quality selector (global for the page)
+        html += `
+        <div class="quality-selector">
+            <span>Quality:</span>
+            <select id="qualitySelect">
+                <option value="360p" ${selectedQuality==='360p'?'selected':''}>360p</option>
+                <option value="480p" ${selectedQuality==='480p'?'selected':''}>480p</option>
+                <option value="720p" ${selectedQuality==='720p'?'selected':''}>720p</option>
+                <option value="1080p" ${selectedQuality==='1080p'?'selected':''}>1080p</option>
+            </select>
+        </div>`;
+
         if (stream.detected_type === 'movie') {
-            if (stream.dash && stream.dash.length > 0) {
+            if (stream.has_resource && (stream.dash?.length || stream.sources?.length)) {
                 html += `<div id="dashPlayerContainer" class="movie-player-container" style="display:none;">
                     <video id="dashVideoElement" controls></video>
                 </div>`;
@@ -252,15 +273,37 @@
 
         detailContentDiv.innerHTML = html;
 
-        if (stream.detected_type === 'movie' && stream.dash?.length) {
+        // Quality change handler
+        document.getElementById('qualitySelect').addEventListener('change', (e) => {
+            selectedQuality = e.target.value;
+            // If a player is currently active, reload with new quality
+            if (stream.detected_type === 'movie' && dashPlayer) {
+                // reload DASH with new quality proxy URL
+                const video = document.getElementById('dashVideoElement');
+                if (video) {
+                    dashPlayer.attachSource(getProxyStreamUrl());
+                }
+            }
+            if (stream.detected_type === 'tv' && tvVideoElement) {
+                // reload TV episode with new quality
+                const se = parseInt(document.getElementById('seasonSelect').value);
+                const ep = parseInt(document.getElementById('episodeSelect').value);
+                loadStreamForEpisode(se, ep);
+            }
+        });
+
+        if (stream.detected_type === 'movie' && (stream.dash?.length || stream.sources?.length)) {
             const playBtn = document.getElementById('playDashBtn');
             const container = document.getElementById('dashPlayerContainer');
             const video = document.getElementById('dashVideoElement');
             playBtn.addEventListener('click', () => {
                 if (!dashPlayer) {
                     dashPlayer = dashjs.MediaPlayer().create();
-                    dashPlayer.initialize(video, stream.dash[0].url, true);
-                } else video.play();
+                    // Initialize with the proxy URL (returns MPD)
+                    dashPlayer.initialize(video, getProxyStreamUrl(), true);
+                } else {
+                    video.play();
+                }
                 container.style.display = 'block';
                 video.play();
             });
@@ -305,32 +348,32 @@
     }
 
     function buildStreamLinks(stream) {
-        let html = '<div class="stream-links"><strong>Direct links:</strong><br>';
+        // Show direct links for reference (they might not work directly, but keep for info)
+        let html = '<div class="stream-links"><strong>Available sources:</strong><br>';
         if(stream.has_resource && stream.sources?.length) {
             stream.sources.forEach(s => {
                 const sizeMB = (s.size/1e6).toFixed(0);
-                const linkUrl = stream.detected_type === 'tv' ? getApiBase() + '/proxy-stream?url=' + encodeURIComponent(s.url) : s.url;
-                html += `<div style="margin:0.3rem 0; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                    <a href="${linkUrl}" target="_blank" style="background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; text-decoration:none; font-size:0.8rem;">⬇ ${s.resolution} (${sizeMB}MB)</a>
-                    <a href="${linkUrl}" target="_blank" style="font-size:0.75rem; color:var(--accent);">(open)</a>
-                </div>`;
+                html += `<span style="margin:0.3rem 0; display:inline-block; background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">${s.resolution} (${sizeMB}MB)</span> `;
             });
-            stream.dash?.forEach(d => html += `<div style="margin:0.3rem 0;"><a href="${d.url}" target="_blank" style="font-size:0.8rem; color:var(--accent);">DASH ${d.resolutions} (${d.codecName})</a></div>`);
-        } else html += '<span style="color:var(--muted);">No stream available.</span>';
+            stream.dash?.forEach(d => {
+                html += `<span style="margin:0.3rem 0; display:inline-block; background:#3366ff; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">DASH ${d.resolutions} (${d.codecName})</span> `;
+            });
+        } else {
+            html += '<span style="color:var(--muted);">No stream available.</span>';
+        }
         html += '</div>';
         return html;
     }
 
     async function loadStreamForEpisode(se, ep) {
-        log(`Loading stream for S${se} E${ep}`);
+        log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
-
             const container = document.getElementById('tvPlayerContainer');
             const video = document.getElementById('tvVideoElement');
-            if (container && video && stream.has_resource && stream.sources.length > 0) {
-                const firstSource = stream.sources[0];
-                const proxyUrl = getApiBase() + '/proxy-stream?url=' + encodeURIComponent(firstSource.url);
+            if (container && video && stream.has_resource && (stream.sources.length > 0 || stream.dash.length > 0)) {
+                // Use the secure proxy URL for playback
+                const proxyUrl = getProxyStreamUrl(se, ep);
                 video.src = proxyUrl;
                 container.style.display = 'block';
                 video.play();
