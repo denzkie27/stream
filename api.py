@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.7"
+    version="1.0.8"
 )
 
 app.add_middleware(
@@ -477,7 +477,7 @@ async def search(q: str = Query(..., min_length=1), page: int = 1, per_page: int
 async def get_movie_detail(slug: str):
     return await _make_request(f"{API_BASE}/detail?detailPath={slug}")
 
-# ---------- STREAM INFO (uses _get_stream_data) ----------
+# ---------- STREAM INFO ----------
 @app.get("/api/stream/{subject_id}")
 async def get_stream_sources(
     subject_id: str,
@@ -551,7 +551,7 @@ async def get_captions(
     captions = inner.get("captions", []) if isinstance(inner, dict) else inner
     return {"subject_id": subject_id, "se": se, "ep": ep, "count": len(captions), "captions": captions}
 
-# ---------- STREAM PROXY (supports format=mp4/dash/auto and debug=1) ----------
+# ---------- STREAM PROXY (now forces player domain) ----------
 @app.get("/stream-proxy/{subject_id}")
 async def stream_proxy(
     subject_id: str,
@@ -564,6 +564,12 @@ async def stream_proxy(
 ):
     try:
         data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
+
+        # Override domain with the actual player domain for CDN requests
+        player_domain = await _get_player_domain()
+        if player_domain:
+            domain = player_domain
+            ref = f"{domain}/spa/videoPlayPage/movies/{detail_path}?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
 
         # Debug mode – return raw stream info
         if debug == 1:
@@ -668,6 +674,13 @@ async def stream_debug(
         mp4_url = sel.get("url")
         if not mp4_url:
             return {"error": "Selected MP4 stream has no URL"}
+
+        # Override domain with player domain
+        player_domain = await _get_player_domain()
+        if player_domain:
+            domain = player_domain
+            ref = f"{domain}/spa/videoPlayPage/movies/{detail_path}?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
+
         cdn_headers = {
             "User-Agent": PLAYER_HEADERS["User-Agent"],
             "Accept": "*/*",
