@@ -101,7 +101,7 @@
     let currentDetailData = null;
     let dashPlayer = null;
     let tvVideoElement = null;
-    let selectedQuality = '480p';   // default quality
+    let selectedQuality = '480p';
 
     function log(msg) {
         statusDiv.textContent += '\n' + msg;
@@ -200,12 +200,10 @@
     }
 
     function getProxyStreamUrl(se = 0, ep = 0) {
-        // Build the secure proxy URL for the current subject
         return `${getApiBase()}/stream-proxy/${currentSubjectId}?detail_path=${encodeURIComponent(currentSlug)}&quality=${selectedQuality}&se=${se}&ep=${ep}`;
     }
 
     function renderDetailPage(detail, stream) {
-        // Clean up previous player
         if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
         if (tvVideoElement) {
             tvVideoElement.pause();
@@ -223,7 +221,6 @@
         html += `<div style="color:var(--muted); margin-bottom:1rem;">${rating ? '⭐ ' + rating : ''}</div>`;
         if(desc) html += `<p>${desc}</p>`;
 
-        // Quality selector (global for the page)
         html += `
         <div class="quality-selector">
             <span>Quality:</span>
@@ -273,19 +270,13 @@
 
         detailContentDiv.innerHTML = html;
 
-        // Quality change handler
         document.getElementById('qualitySelect').addEventListener('change', (e) => {
             selectedQuality = e.target.value;
-            // If a player is currently active, reload with new quality
             if (stream.detected_type === 'movie' && dashPlayer) {
-                // reload DASH with new quality proxy URL
                 const video = document.getElementById('dashVideoElement');
-                if (video) {
-                    dashPlayer.attachSource(getProxyStreamUrl());
-                }
+                if (video) dashPlayer.attachSource(getProxyStreamUrl());
             }
             if (stream.detected_type === 'tv' && tvVideoElement) {
-                // reload TV episode with new quality
                 const se = parseInt(document.getElementById('seasonSelect').value);
                 const ep = parseInt(document.getElementById('episodeSelect').value);
                 loadStreamForEpisode(se, ep);
@@ -299,7 +290,6 @@
             playBtn.addEventListener('click', () => {
                 if (!dashPlayer) {
                     dashPlayer = dashjs.MediaPlayer().create();
-                    // Initialize with the proxy URL (returns MPD)
                     dashPlayer.initialize(video, getProxyStreamUrl(), true);
                 } else {
                     video.play();
@@ -348,7 +338,6 @@
     }
 
     function buildStreamLinks(stream) {
-        // Show direct links for reference (they might not work directly, but keep for info)
         let html = '<div class="stream-links"><strong>Available sources:</strong><br>';
         if(stream.has_resource && stream.sources?.length) {
             stream.sources.forEach(s => {
@@ -372,7 +361,6 @@
             const container = document.getElementById('tvPlayerContainer');
             const video = document.getElementById('tvVideoElement');
             if (container && video && stream.has_resource && (stream.sources.length > 0 || stream.dash.length > 0)) {
-                // Use the secure proxy URL for playback
                 const proxyUrl = getProxyStreamUrl(se, ep);
                 video.src = proxyUrl;
                 container.style.display = 'block';
