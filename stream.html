@@ -207,11 +207,7 @@
     }
 
     function renderDetailPage(detail, stream) {
-        // Fully destroy any existing player
-        if (dashPlayer) {
-            dashPlayer.destroy();
-            dashPlayer = null;
-        }
+        if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
         if (tvVideoElement) {
             tvVideoElement.pause();
             tvVideoElement.removeAttribute('src');
@@ -362,77 +358,75 @@
         return html;
     }
 
-    // Reset video element and dash player cleanly
     function resetPlayer() {
         if (dashPlayer) {
             try { dashPlayer.destroy(); } catch(e) {}
             dashPlayer = null;
         }
-        const video = document.getElementById('tvVideoElement') || document.getElementById('dashVideoElement');
+        const video = document.getElementById('tvVideoElement');
         if (video) {
             video.pause();
             video.removeAttribute('src');
             video.load();
-            // remove any error listeners by replacing node (simple)
+            // clone to remove event listeners
             const newVideo = video.cloneNode(true);
             video.parentNode.replaceChild(newVideo, video);
-            // re-assign id so later we can find it
-            newVideo.id = video.id;
-            // if it's TV, update tvVideoElement reference
-            if (newVideo.id === 'tvVideoElement') tvVideoElement = newVideo;
+            newVideo.id = 'tvVideoElement';
+            tvVideoElement = newVideo;
         }
     }
 
     async function loadStreamForEpisode(se, ep) {
-        log(`Loading stream for S${se} E${ep} at ${selectedQuality} (DASH)`);
+        log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
         const container = document.getElementById('tvPlayerContainer');
         const errorDiv = document.getElementById('tvPlayerError');
         let video = document.getElementById('tvVideoElement');
 
         if (!container || !video) {
-            log('TV player container or video element not found');
+            log('Player container not found');
             return;
         }
 
         // Reset everything
         resetPlayer();
-        // after reset, video may be a new element, get it again
         video = document.getElementById('tvVideoElement');
         container.style.display = 'none';
         if (errorDiv) errorDiv.style.display = 'none';
 
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
-            if (!stream.has_resource || stream.dash.length === 0) {
-                log('No DASH resource for this episode');
+            // Log full stream data for debugging
+            log(`Stream data: hasResource=${stream.has_resource}, MP4 count=${stream.sources?.length||0}, DASH count=${stream.dash?.length||0}`);
+            if (stream.dash?.length > 0) {
+                log(`First DASH url: ${stream.dash[0].url}`);
+            }
+
+            if (!stream.has_resource || (stream.sources.length === 0 && stream.dash.length === 0)) {
+                log('No playable source for this episode.');
                 return;
             }
 
-            const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
-            log('Proxy DASH URL: ' + proxyUrl);
-
-            // Create fresh dash player
-            dashPlayer = dashjs.MediaPlayer().create();
-            dashPlayer.initialize(video, proxyUrl, true);
-
-            // Error handling for dash.js
-            dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e) => {
-                log('Dash.js error: ' + JSON.stringify(e.error));
-                if (errorDiv) {
-                    errorDiv.style.display = 'block';
-                    errorDiv.textContent = 'Playback error. Check console/status for details.';
-                }
-            });
-
-            container.style.display = 'block';
-            video.play().catch(() => {
-                log('Autoplay blocked – press the play button on the video.');
-            });
-            tvVideoElement = video;
-
-            const linksContainer = document.getElementById('streamContainer');
-            if (linksContainer) {
-                linksContainer.innerHTML = buildStreamLinks(stream);
+            // Decide which format to use: prefer DASH, fallback to MP4
+            if (stream.dash && stream.dash.length > 0) {
+                const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
+                log('Using DASH: ' + proxyUrl);
+                dashPlayer = dashjs.MediaPlayer().create();
+                dashPlayer.initialize(video, proxyUrl, true);
+                dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e) => {
+                    log('Dash.js error: ' + JSON.stringify(e.error));
+                    if (errorDiv) {
+                        errorDiv.style.display = 'block';
+                        errorDiv.textContent = 'DASH playback error. Trying MP4 fallback...';
+                    }
+                    // Fallback to MP4
+                    loadStreamWithMP4(se, ep, stream);
+                });
+                container.style.display = 'block';
+                video.play().catch(() => log('Autoplay blocked – press play'));
+                tvVideoElement = video;
+            } else if (stream.sources && stream.sources.length > 0) {
+                // No DASH, use MP4 directly
+                loadStreamWithMP4(se, ep, stream);
             }
         } catch(e) {
             log('Failed to load episode: ' + e.message);
@@ -441,6 +435,31 @@
                 errorDiv.textContent = 'Error: ' + e.message;
             }
         }
+    }
+
+    async function loadStreamWithMP4(se, ep, stream) {
+        const container = document.getElementById('tvPlayerContainer');
+        const errorDiv = document.getElementById('tvPlayerError');
+        const video = document.getElementById('tvVideoElement');
+        if (!video) return;
+
+        const proxyUrl = getProxyStreamUrl(se, ep, 'mp4');
+        log('Using MP4: ' + proxyUrl);
+        video.src = proxyUrl;
+        container.style.display = 'block';
+        video.play().catch(() => {});
+        tvVideoElement = video;
+
+        video.onerror = () => {
+            const err = video.error;
+            const msgs = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
+            const msg = msgs[err?.code] || 'Unknown';
+            log(`MP4 error: ${msg}`);
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = `MP4 playback failed (${msg}). The stream may not be available.`;
+            }
+        };
     }
 
     function handleHashChange() {
