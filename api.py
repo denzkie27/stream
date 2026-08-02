@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.5"
+    version="1.0.6"
 )
 
 app.add_middleware(
@@ -551,7 +551,7 @@ async def get_captions(
     captions = inner.get("captions", []) if isinstance(inner, dict) else inner
     return {"subject_id": subject_id, "se": se, "ep": ep, "count": len(captions), "captions": captions}
 
-# ---------- STREAM PROXY (supports format=mp4/dash/auto) ----------
+# ---------- STREAM PROXY (supports format=mp4/dash/auto and debug=1) ----------
 @app.get("/stream-proxy/{subject_id}")
 async def stream_proxy(
     subject_id: str,
@@ -559,10 +559,21 @@ async def stream_proxy(
     quality: str = "480p",
     se: int = 0,
     ep: int = 0,
-    format: str = "auto"
+    format: str = "auto",
+    debug: int = 0
 ):
     try:
         data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
+
+        # Debug mode – return raw stream info
+        if debug == 1:
+            return {
+                "hasResource": data.get("hasResource"),
+                "streams": data.get("streams"),
+                "dash": data.get("dash"),
+                "domain": domain,
+                "ref": ref
+            }
 
         # --- MP4 only ---
         if format == "mp4":
