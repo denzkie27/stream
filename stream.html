@@ -356,7 +356,6 @@
         return html;
     }
 
-    // TV episode loader – always MP4
     async function loadStreamForEpisode(se, ep) {
         log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
         try {
@@ -375,18 +374,15 @@
                 dashPlayer = null;
             }
 
-            // Always request MP4 for TV episodes
             const proxyUrl = getProxyStreamUrl(se, ep, 'mp4');
 
+            video.pause();
             video.src = proxyUrl;
             container.style.display = 'block';
-            video.play();
             tvVideoElement = video;
 
-            video.onerror = () => {
-                log('MP4 playback failed – no fallback available.');
-                container.style.display = 'none';
-            };
+            // Try to play, but ignore autoplay restrictions
+            video.play().catch(() => {});
 
             const linksContainer = document.getElementById('streamContainer');
             if (linksContainer) {
