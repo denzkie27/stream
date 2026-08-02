@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.8"
+    version="1.0.9"
 )
 
 app.add_middleware(
@@ -28,9 +28,8 @@ _bearer_token: str | None = None
 _token_lock = asyncio.Lock()
 REQUEST_TIMEOUT = 30.0
 
-# Cache for stream data (key -> (data, domain, ref, timestamp))
 _stream_cache = {}
-CACHE_TTL = 15  # seconds
+CACHE_TTL = 15
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
@@ -116,7 +115,6 @@ async def _make_request(url: str, method: str = "GET", payload: dict = None, cus
             raise HTTPException(status_code=502, detail=f"Request failed: {str(e)}")
 
 async def _get_content_type(slug: str) -> str:
-    """Robust content type detection using resourceType, subjectType, and seasons."""
     if not hasattr(_get_content_type, "cache"):
         _get_content_type.cache = {}
     if slug in _get_content_type.cache:
@@ -165,9 +163,8 @@ async def _get_player_domain() -> str:
     except Exception:
         return "https://netfilm.world"
 
-# ---------- STREAM DATA FETCHER (multi‑domain) ----------
+# ---------- STREAM DATA FETCHER (prefers DASH) ----------
 async def _get_stream_data(sid: str, slug: str, se: int = 0, ep: int = 0):
-    """Try multiple methods to get stream data – returns (data, domain, ref)"""
     cache_key = f"{sid}|{slug}|{se}|{ep}"
     now = time.time()
     if cache_key in _stream_cache:
@@ -175,53 +172,60 @@ async def _get_stream_data(sid: str, slug: str, se: int = 0, ep: int = 0):
         if now - ts < CACHE_TTL:
             return data, domain, ref
 
-    # Method 1: Get domain from API, then fetch stream
+    results = []
+
+    # Method 1: player domain
     try:
         domain = await _get_player_domain()
         ref = f"{domain}/spa/videoPlayPage/movies/{slug}?id={sid}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
         url = f"{domain}/wefeed-h5api-bff/subject/play?subjectId={sid}&se={se}&ep={ep}&detailPath={slug}"
-
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as c:
             r = await c.get(url, headers={**PLAYER_HEADERS, "Referer": ref, "Origin": domain})
             data = r.json().get("data", {})
-            if data.get("hasResource") and (data.get("streams") or data.get("dash")):
-                _stream_cache[cache_key] = (data, domain, ref, now)
-                return data, domain, ref
-    except Exception as e:
+            if data.get("hasResource"):
+                results.append((data, domain, ref))
+    except Exception:
         pass
 
-    # Method 2: Try moviebox.ph domain
+    # Method 2: moviebox.ph
     try:
         domain = "https://moviebox.ph"
         ref = f"{domain}/spa/videoPlayPage/movies/{slug}?id={sid}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
         url = f"https://h5-api.aoneroom.com/wefeed-h5api-bff/subject/play?subjectId={sid}&se={se}&ep={ep}&detailPath={slug}"
-
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as c:
             r = await c.get(url, headers={**PLAYER_HEADERS, "Referer": ref, "Origin": domain})
             data = r.json().get("data", {})
-            if data.get("hasResource") and (data.get("streams") or data.get("dash")):
-                _stream_cache[cache_key] = (data, domain, ref, now)
-                return data, domain, ref
-    except Exception as e:
+            if data.get("hasResource"):
+                results.append((data, domain, ref))
+    except Exception:
         pass
 
-    # Method 3: Try netfilm.world directly
+    # Method 3: netfilm.world
     try:
         domain = "https://netfilm.world"
         ref = f"{domain}/spa/videoPlayPage/movies/{slug}?id={sid}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
         url = f"{domain}/wefeed-h5api-bff/subject/play?subjectId={sid}&se={se}&ep={ep}&detailPath={slug}"
-
         async with httpx.AsyncClient(follow_redirects=True, timeout=30) as c:
             r = await c.get(url, headers={**PLAYER_HEADERS, "Referer": ref, "Origin": domain})
             data = r.json().get("data", {})
-            if data.get("hasResource") and (data.get("streams") or data.get("dash")):
-                _stream_cache[cache_key] = (data, domain, ref, now)
-                return data, domain, ref
-    except Exception as e:
+            if data.get("hasResource"):
+                results.append((data, domain, ref))
+    except Exception:
         pass
 
-    # Fallback: return empty
-    return {"hasResource": False, "streams": [], "dash": []}, "", ""
+    # Prefer a result that has DASH, else pick any
+    chosen = None
+    for res in results:
+        if res[0].get("dash"):
+            chosen = res
+            break
+    if not chosen and results:
+        chosen = results[0]
+    if not chosen:
+        chosen = ({"hasResource": False, "streams": [], "dash": []}, "", "")
+
+    _stream_cache[cache_key] = (chosen[0], chosen[1], chosen[2], now)
+    return chosen
 
 # ---------- DASHBOARD ----------
 @app.get("/", response_class=HTMLResponse)
@@ -551,7 +555,7 @@ async def get_captions(
     captions = inner.get("captions", []) if isinstance(inner, dict) else inner
     return {"subject_id": subject_id, "se": se, "ep": ep, "count": len(captions), "captions": captions}
 
-# ---------- STREAM PROXY (now forces player domain) ----------
+# ---------- STREAM PROXY ----------
 @app.get("/stream-proxy/{subject_id}")
 async def stream_proxy(
     subject_id: str,
@@ -571,7 +575,6 @@ async def stream_proxy(
             domain = player_domain
             ref = f"{domain}/spa/videoPlayPage/movies/{detail_path}?id={subject_id}&type=/movie/detail&detailSe={se}&detailEp={ep}&lang=en"
 
-        # Debug mode – return raw stream info
         if debug == 1:
             return {
                 "hasResource": data.get("hasResource"),
@@ -675,7 +678,6 @@ async def stream_debug(
         if not mp4_url:
             return {"error": "Selected MP4 stream has no URL"}
 
-        # Override domain with player domain
         player_domain = await _get_player_domain()
         if player_domain:
             domain = player_domain
