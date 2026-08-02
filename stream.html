@@ -21,7 +21,7 @@
         .search-bar { display: flex; gap: 0.5rem; margin: 1rem 0; }
         .search-bar input { flex: 1; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
         .search-bar button { padding: 0.8rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-weight: bold; }
-        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
+        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 250px; overflow-y: auto; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
         .movie-card { background: var(--card); border-radius: 14px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; }
         .movie-card:active { transform: scale(0.97); }
@@ -58,6 +58,7 @@
         .loading-text { color: var(--muted); text-align: center; padding: 1rem; }
         .quality-selector { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
         .quality-selector select { padding: 0.4rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+        .debug-btn { background: #f0ad4e; color: #000; border: none; padding: 0.5rem 1rem; border-radius: 8px; margin-left: 0.5rem; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -205,6 +206,20 @@
         return url;
     }
 
+    async function debugStreamData(se, ep) {
+        try {
+            const data = await fetchJSON(`/stream-proxy/${currentSubjectId}?detail_path=${encodeURIComponent(currentSlug)}&quality=${selectedQuality}&se=${se}&ep=${ep}&debug=1`);
+            log('🔍 DEBUG STREAM DATA:');
+            log('hasResource: ' + data.hasResource);
+            log('MP4 Streams: ' + JSON.stringify(data.streams?.map(s => s.resolutions + ' - ' + s.size) || []));
+            log('DASH Streams: ' + JSON.stringify(data.dash?.map(d => d.resolutions + ' - ' + d.codecName) || []));
+            log('Domain: ' + data.domain);
+            alert('Check the status box below for debug info.');
+        } catch(e) {
+            log('Debug failed: ' + e.message);
+        }
+    }
+
     function renderDetailPage(detail, stream) {
         if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
         if (tvVideoElement) {
@@ -270,7 +285,22 @@
         html += `<button id="loadCaptionsBtn" style="margin-top:1rem; background:var(--card); border:1px solid var(--border); padding:0.5rem 1rem; color:white; border-radius:8px;">Load Subtitles</button>`;
         html += '<div id="captionsList" style="margin-top:1rem;"></div>';
 
+        // Debug button for TV shows
+        if (stream.detected_type === 'tv') {
+            html += `<button id="debugStreamBtn" class="debug-btn" style="margin-top:0.5rem;">🔍 Debug Stream Data</button>`;
+        }
+
         detailContentDiv.innerHTML = html;
+
+        // Debug button handler
+        const debugBtn = document.getElementById('debugStreamBtn');
+        if (debugBtn) {
+            debugBtn.addEventListener('click', () => {
+                const se = parseInt(document.getElementById('seasonSelect').value);
+                const ep = parseInt(document.getElementById('episodeSelect').value);
+                debugStreamData(se, ep);
+            });
+        }
 
         document.getElementById('qualitySelect').addEventListener('change', (e) => {
             selectedQuality = e.target.value;
@@ -381,7 +411,22 @@
             container.style.display = 'block';
             tvVideoElement = video;
 
-            // Try to play, but ignore autoplay restrictions
+            video.onerror = () => {
+                const err = video.error;
+                log(`MP4 ERROR: code=${err?.code}, message=${err?.message}`);
+                // Fallback to DASH after short delay
+                setTimeout(() => {
+                    if (stream.dash && stream.dash.length > 0) {
+                        log('Attempting DASH fallback...');
+                        if (dashPlayer) dashPlayer.destroy();
+                        dashPlayer = dashjs.MediaPlayer().create();
+                        dashPlayer.initialize(video, getProxyStreamUrl(se, ep, 'dash'), true);
+                    } else {
+                        log('No DASH fallback available.');
+                    }
+                }, 1000);
+            };
+
             video.play().catch(() => {});
 
             const linksContainer = document.getElementById('streamContainer');
