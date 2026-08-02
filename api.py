@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Stream API",
     description="Ad‑free streaming API for movies and TV shows",
-    version="1.0.6"
+    version="1.0.7"
 )
 
 app.add_middleware(
@@ -648,6 +648,43 @@ async def stream_proxy(
         raise
     except Exception as e:
         raise HTTPException(500, f"Stream proxy error: {str(e)}")
+
+# ---------- STREAM DEBUG ----------
+@app.get("/stream-debug/{subject_id}")
+async def stream_debug(
+    subject_id: str,
+    detail_path: str,
+    quality: str = "480p",
+    se: int = 0,
+    ep: int = 0
+):
+    try:
+        data, domain, ref = await _get_stream_data(subject_id, detail_path, se, ep)
+        mp4_streams = data.get("streams", [])
+        if not mp4_streams:
+            return {"error": "No MP4 streams available"}
+        q = quality.replace("p", "")
+        sel = next((s for s in mp4_streams if s.get("resolutions") == q), mp4_streams[-1])
+        mp4_url = sel.get("url")
+        if not mp4_url:
+            return {"error": "Selected MP4 stream has no URL"}
+        cdn_headers = {
+            "User-Agent": PLAYER_HEADERS["User-Agent"],
+            "Accept": "*/*",
+            "Referer": ref,
+            "Origin": domain,
+        }
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30, verify=False) as c:
+            r = await c.get(mp4_url, headers=cdn_headers)
+            return {
+                "status_code": r.status_code,
+                "content_type": r.headers.get("content-type", "unknown"),
+                "url": mp4_url,
+                "domain": domain,
+                "ref": ref
+            }
+    except Exception as e:
+        return {"error": str(e)}
 
 # ---------- WEB UI ----------
 @app.get("/stream", response_class=HTMLResponse)
