@@ -3,38 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Stream</title>
+    <title>Stream - Dashboard</title>
     <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
     <style>
         :root {
             --bg: #0b0e14; --card: #13171f; --accent: #ff3d71; --text: #e0e0e0;
-            --muted: #888; --border: rgba(255,255,255,0.08);
+            --muted: #888; --border: rgba(255,255,255,0.08); --accent2: #3366ff;
         }
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 1rem; min-height: 100vh; }
-        .container { max-width: 600px; margin: auto; }
-        header { text-align: center; margin-bottom: 1.5rem; }
-        h1 { font-size: 2rem; background: linear-gradient(135deg, #ff3d71, #3366ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .container { max-width: 1200px; margin: auto; }
+        header { text-align: center; margin-bottom: 1.5rem; position: relative; }
+        h1 { font-size: 2.5rem; background: linear-gradient(135deg, #ff3d71, #3366ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
+        .subtitle { color: var(--muted); font-size: 0.9rem; }
+        
         .config { background: var(--card); padding: 0.8rem; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
         .config input { flex: 1; min-width: 200px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); background: #000; color: var(--text); }
-        .config button { padding: 0.6rem 1rem; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-weight: bold; }
-        .search-bar { display: flex; gap: 0.5rem; margin: 1rem 0; }
-        .search-bar input { flex: 1; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
-        .search-bar button { padding: 0.8rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-weight: bold; }
-        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 250px; overflow-y: auto; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
-        .movie-card { background: var(--card); border-radius: 14px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; }
+        .config button { padding: 0.6rem 1rem; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-weight: bold; cursor: pointer; }
+        
+        .search-bar { display: flex; gap: 0.5rem; margin: 1rem 0; position: sticky; top: 0; z-index: 100; background: var(--bg); padding: 0.5rem 0; }
+        .search-bar input { flex: 1; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 1rem; }
+        .search-bar button { padding: 0.8rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        
+        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 150px; overflow-y: auto; display: none; }
+        #status.visible { display: block; }
+        
+        .category-tabs { display: flex; gap: 0.8rem; overflow-x: auto; padding: 0.5rem 0; margin: 1rem 0; scrollbar-width: thin; }
+        .category-tabs::-webkit-scrollbar { height: 6px; }
+        .category-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .tab-btn { padding: 0.6rem 1.2rem; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 20px; cursor: pointer; white-space: nowrap; transition: all 0.3s; font-size: 0.9rem; }
+        .tab-btn:hover { background: var(--border); }
+        .tab-btn.active { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white; border-color: transparent; }
+        
+        .section { margin: 2rem 0; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .section-title { font-size: 1.5rem; font-weight: bold; }
+        .section-more { color: var(--accent); cursor: pointer; font-size: 0.9rem; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .grid.compact { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.8rem; }
+        
+        .movie-card { background: var(--card); border-radius: 14px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; position: relative; }
+        .movie-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
         .movie-card:active { transform: scale(0.97); }
         .movie-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
         .movie-card .info { padding: 0.6rem; font-size: 0.85rem; }
         .movie-card .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
+        .movie-card .meta { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
+        .movie-card .badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: #fff; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; }
+        
         .detail-page { display: none; }
         .detail-page.active { display: block; }
         .search-page { display: block; }
         .search-page.hidden { display: none; }
         .back-btn { background: none; border: none; color: var(--accent); font-size: 1.2rem; cursor: pointer; margin-bottom: 1rem; padding: 0.3rem 0.6rem; border-radius: 8px; }
         .back-btn:hover { background: var(--border); }
+        
         .movie-player-container {
             position: relative;
             width: 100%;
@@ -50,36 +74,77 @@
             top: 0; left: 0;
             width: 100%; height: 100%;
         }
+        
         .play-direct-btn { display: block; background: #28a745; color: #fff; padding: 0.8rem; text-align: center; border-radius: 12px; margin: 1rem 0; font-weight: bold; text-decoration: none; font-size: 1rem; border: none; width: 100%; cursor: pointer; }
         .unavailable-msg { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 1.5rem; text-align: center; color: var(--muted); margin: 1rem 0; }
         .episode-selector { display: flex; gap: 0.5rem; margin: 1rem 0; align-items: center; flex-wrap: wrap; }
         .episode-selector select { padding: 0.5rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; flex: 1; min-width: 100px; }
         .stream-links a { display: inline-block; margin: 0.3rem 0.5rem 0.3rem 0; padding: 0.5rem 0.8rem; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.8rem; }
         .loading-text { color: var(--muted); text-align: center; padding: 1rem; }
-        .quality-selector { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
-        .quality-selector select { padding: 0.4rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
-        .error-msg { color: #ff6b6b; margin-top: 0.5rem; }
+        
+        .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .stat-card { background: var(--card); padding: 1rem; border-radius: 12px; text-align: center; border: 1px solid var(--border); }
+        .stat-number { font-size: 2rem; font-weight: bold; background: linear-gradient(135deg, #ff3d71, #3366ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .stat-label { color: var(--muted); font-size: 0.85rem; margin-top: 0.3rem; }
+        
+        @media (max-width: 600px) {
+            .grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.8rem; }
+            .movie-card .info { padding: 0.4rem; font-size: 0.75rem; }
+            .section-title { font-size: 1.2rem; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div id="searchPage" class="search-page">
-        <header><h1>🎬 Stream</h1></header>
+        <header>
+            <h1>🎬 Stream</h1>
+            <p class="subtitle">Your Ultimate Entertainment Hub</p>
+        </header>
+        
         <div class="config">
             <input type="text" id="apiBase" value="" placeholder="API base URL (leave empty for same site)">
             <button onclick="testConnection()">Test</button>
+            <button onclick="toggleStatus()">Log</button>
         </div>
+        
         <div id="status">Status: ready</div>
+        
         <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Enter movie or series...">
+            <input type="text" id="searchInput" placeholder="Search movies, series, anime...">
             <button id="searchBtn">Search</button>
         </div>
-        <div id="results" class="grid"></div>
+        
+        <div id="statsBar" class="stats-bar" style="display:none;"></div>
+        
+        <div class="category-tabs" id="categoryTabs">
+            <button class="tab-btn active" data-category="home">🏠 Home</button>
+            <button class="tab-btn" data-category="popular">🔥 Popular</button>
+            <button class="tab-btn" data-category="trending">📈 Trending</button>
+            <button class="tab-btn" data-category="now_playing">🎬 Now Playing</button>
+            <button class="tab-btn" data-category="top_rated">⭐ Top Rated</button>
+            <button class="tab-btn" data-category="upcoming">📅 Upcoming</button>
+            <button class="tab-btn" data-category="tv_series">📺 TV Series</button>
+            <button class="tab-btn" data-category="tagalog">🇵🇭 Tagalog</button>
+            <button class="tab-btn" data-category="anime">🌸 Anime</button>
+            <button class="tab-btn" data-category="kdrama">🇰🇷 K-Drama</button>
+        </div>
+        
+        <div id="dashboardContent">
+            <!-- Dashboard sections will be rendered here -->
+        </div>
+        
+        <div id="searchResults" style="display:none;">
+            <h2 style="margin: 1rem 0;">Search Results</h2>
+            <div id="results" class="grid"></div>
+        </div>
+        
         <div id="loading" class="loading-text" style="display:none;">Loading...</div>
     </div>
 
     <div id="detailPage" class="detail-page">
-        <button id="backBtn" class="back-btn">← Back to search</button>
+        <button id="backBtn" class="back-btn">← Back to dashboard</button>
         <div id="detailContent"></div>
     </div>
 </div>
@@ -96,17 +161,38 @@
     const detailPage = document.getElementById('detailPage');
     const detailContentDiv = document.getElementById('detailContent');
     const backBtn = document.getElementById('backBtn');
+    const dashboardContent = document.getElementById('dashboardContent');
+    const searchResults = document.getElementById('searchResults');
+    const statsBar = document.getElementById('statsBar');
+    const categoryTabs = document.getElementById('categoryTabs');
 
     let currentSubjectId = null;
     let currentSlug = null;
     let currentDetailData = null;
     let dashPlayer = null;
     let tvVideoElement = null;
-    let selectedQuality = '480p';
+    let currentCategory = 'home';
+    let dashboardData = {};
+
+    const CATEGORY_MAPPING = {
+        popular: 'popular',
+        trending: 'trending',
+        now_playing: 'now-playing',
+        top_rated: 'top-rated',
+        upcoming: 'upcoming',
+        tv_series: 'tv-series',
+        tagalog: 'tagalog',
+        anime: 'anime',
+        kdrama: 'kdrama'
+    };
 
     function log(msg) {
         statusDiv.textContent += '\n' + msg;
         console.log(msg);
+    }
+
+    function toggleStatus() {
+        statusDiv.classList.toggle('visible');
     }
 
     function getApiBase() {
@@ -126,55 +212,210 @@
 
     window.testConnection = async function() {
         try {
-            await fetchJSON('/home');
+            const data = await fetchJSON('/home');
             log('✅ Connection successful!');
+            log('Available endpoints: ' + JSON.stringify(data).substring(0, 200));
+            loadDashboard();
         } catch(e) {
             log('❌ Connection failed: ' + e.message);
         }
     };
 
+    async function loadDashboard() {
+        loadingDiv.style.display = 'block';
+        dashboardContent.innerHTML = '';
+        log('Loading dashboard...');
+        
+        try {
+            // Try to fetch multiple categories in parallel
+            const categories = ['popular', 'trending', 'now_playing', 'top_rated', 'tv_series', 'tagalog'];
+            const fetchPromises = categories.map(cat => {
+                const endpoint = '/' + (CATEGORY_MAPPING[cat] || cat);
+                return fetchJSON(endpoint).then(data => ({cat, data})).catch(e => {
+                    log(`Failed to load ${cat}: ${e.message}`);
+                    return {cat, data: null};
+                });
+            });
+            
+            const results = await Promise.all(fetchPromises);
+            
+            let hasData = false;
+            results.forEach(({cat, data}) => {
+                if (data && data.items && data.items.length > 0) {
+                    dashboardData[cat] = data;
+                    hasData = true;
+                }
+            });
+            
+            if (hasData) {
+                renderDashboard();
+                renderStats();
+            } else {
+                dashboardContent.innerHTML = '<div class="unavailable-msg">No dashboard data available. Check API connection.</div>';
+            }
+        } catch(e) {
+            log('Dashboard error: ' + e.message);
+            dashboardContent.innerHTML = '<div class="unavailable-msg">Failed to load dashboard: ' + e.message + '</div>';
+        }
+        
+        loadingDiv.style.display = 'none';
+    }
+
+    function renderStats() {
+        const stats = [];
+        Object.keys(dashboardData).forEach(cat => {
+            const data = dashboardData[cat];
+            if (data && data.total_count) {
+                stats.push({label: cat.replace('_', ' ').toUpperCase(), count: data.total_count});
+            } else if (data && data.items) {
+                stats.push({label: cat.replace('_', ' ').toUpperCase(), count: data.items.length});
+            }
+        });
+        
+        if (stats.length > 0) {
+            statsBar.style.display = 'grid';
+            statsBar.innerHTML = stats.map(stat => 
+                `<div class="stat-card">
+                    <div class="stat-number">${stat.count}</div>
+                    <div class="stat-label">${stat.label}</div>
+                </div>`
+            ).join('');
+        }
+    }
+
+    function renderDashboard() {
+        let html = '';
+        
+        // Render sections in priority order
+        const sections = [
+            {cat: 'popular', title: '🔥 Popular Now', icon: '🔥'},
+            {cat: 'trending', title: '📈 Trending', icon: '📈'},
+            {cat: 'now_playing', title: '🎬 Now Playing', icon: '🎬'},
+            {cat: 'tv_series', title: '📺 TV Series', icon: '📺'},
+            {cat: 'tagalog', title: '🇵🇭 Tagalog', icon: '🇵🇭'},
+            {cat: 'top_rated', title: '⭐ Top Rated', icon: '⭐'}
+        ];
+        
+        sections.forEach(section => {
+            const data = dashboardData[section.cat];
+            if (data && data.items && data.items.length > 0) {
+                html += `<div class="section">
+                    <div class="section-header">
+                        <div class="section-title">${section.title}</div>
+                        <div class="section-more" onclick="switchCategory('${section.cat}')">See All →</div>
+                    </div>
+                    <div class="grid compact">
+                        ${data.items.slice(0, 6).map(item => renderMovieCard(item)).join('')}
+                    </div>
+                </div>`;
+            }
+        });
+        
+        if (!html) {
+            html = '<div class="unavailable-msg">No content available. Check your API connection.</div>';
+        }
+        
+        dashboardContent.innerHTML = html;
+    }
+
+    function renderMovieCard(item) {
+        const poster = item.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster';
+        const badge = item.type === 'series' ? '📺' : '🎬';
+        return `<div class="movie-card" data-slug="${item.slug||''}" data-subjectid="${item.subject_id||''}" data-type="${item.type||''}">
+            <img src="${poster}" alt="${item.name||''}" loading="lazy">
+            <div class="badge">${badge}</div>
+            <div class="info">
+                <div class="title">${item.name||'Untitled'}</div>
+                <div class="meta">${item.year||''} ${item.rating?'⭐'+item.rating:''}</div>
+            </div>
+        </div>`;
+    }
+
+    function switchCategory(category) {
+        currentCategory = category;
+        // Update active tab
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.category === category);
+        });
+        
+        if (category === 'home') {
+            searchResults.style.display = 'none';
+            dashboardContent.style.display = 'block';
+            renderDashboard();
+        } else {
+            dashboardContent.style.display = 'none';
+            searchResults.style.display = 'block';
+            loadCategoryContent(category);
+        }
+    }
+
+    async function loadCategoryContent(category) {
+        loadingDiv.style.display = 'block';
+        resultsGrid.innerHTML = '';
+        
+        try {
+            const endpoint = '/' + (CATEGORY_MAPPING[category] || category);
+            const data = await fetchJSON(endpoint);
+            const items = data.items || [];
+            log(`Loaded ${category}: ${items.length} items`);
+            
+            if (items.length > 0) {
+                resultsGrid.innerHTML = items.map(item => renderMovieCard(item)).join('');
+            } else {
+                resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">No content in this category</div>';
+            }
+        } catch(e) {
+            log(`Failed to load ${category}: ${e.message}`);
+            resultsGrid.innerHTML = `<div style="color:#ff6b6b; grid-column:1/-1;">Failed to load: ${e.message}</div>`;
+        }
+        
+        loadingDiv.style.display = 'none';
+    }
+
     async function doSearch() {
         const q = searchInput.value.trim();
         if(!q) return;
+        
         loadingDiv.style.display = 'block';
+        searchResults.style.display = 'block';
+        dashboardContent.style.display = 'none';
         resultsGrid.innerHTML = '';
         log('Searching: ' + q);
+        
         try {
             const data = await fetchJSON('/search?q=' + encodeURIComponent(q));
             const items = data.items || [];
             log('Found ' + items.length + ' results.');
-            renderResults(items);
+            
+            if (items.length > 0) {
+                resultsGrid.innerHTML = items.map(item => renderMovieCard(item)).join('');
+            } else {
+                resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">Nothing found</div>';
+            }
         } catch(e) {
             log('Search error: ' + e.message);
             resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1;">Search failed</div>';
         }
+        
         loadingDiv.style.display = 'none';
     }
 
-    function renderResults(items) {
-        if(!items.length) {
-            resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">Nothing found</div>';
-            return;
-        }
-        resultsGrid.innerHTML = items.map((item) => {
-            const poster = item.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster';
-            return `<div class="movie-card" data-slug="${item.slug||''}" data-subjectid="${item.subject_id||''}">
-                <img src="${poster}" alt="${item.name||''}">
-                <div class="info">
-                    <div class="title">${item.name||'Untitled'}</div>
-                    <div style="font-size:0.75rem; color:var(--muted);">${item.year||''} ${item.rating?'⭐'+item.rating:''}</div>
-                </div>
-            </div>`;
-        }).join('');
-    }
-
-    resultsGrid.addEventListener('click', (e) => {
+    // Event delegation for movie cards
+    document.addEventListener('click', (e) => {
         const card = e.target.closest('.movie-card');
         if(!card) return;
         const slug = card.dataset.slug;
         const subjectId = card.dataset.subjectid;
         if(!slug || !subjectId) { log('Missing slug or ID.'); return; }
         navigateToDetail(slug, subjectId);
+    });
+
+    // Category tabs
+    categoryTabs.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tab-btn');
+        if (btn) {
+            switchCategory(btn.dataset.category);
+        }
     });
 
     function navigateToDetail(slug, subjectId) {
@@ -188,6 +429,7 @@
         detailPage.classList.add('active');
         detailContentDiv.innerHTML = '<div class="loading-text">Loading details...</div>';
         log('Loading detail: ' + slug);
+        
         try {
             const detail = await fetchJSON('/detail/' + slug);
             const stream = await fetchJSON('/api/stream/' + subjectId + '?detail_path=' + slug);
@@ -198,12 +440,6 @@
             detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error: ' + e.message + '</div>';
             log('Error: ' + e.message);
         }
-    }
-
-    function getProxyStreamUrl(se = 0, ep = 0, format = 'auto') {
-        let url = `${getApiBase()}/stream-proxy/${currentSubjectId}?detail_path=${encodeURIComponent(currentSlug)}&quality=${selectedQuality}&se=${se}&ep=${ep}`;
-        if (format !== 'auto') url += `&format=${format}`;
-        return url;
     }
 
     function renderDetailPage(detail, stream) {
@@ -224,19 +460,8 @@
         html += `<div style="color:var(--muted); margin-bottom:1rem;">${rating ? '⭐ ' + rating : ''}</div>`;
         if(desc) html += `<p>${desc}</p>`;
 
-        html += `
-        <div class="quality-selector">
-            <span>Quality:</span>
-            <select id="qualitySelect">
-                <option value="360p" ${selectedQuality==='360p'?'selected':''}>360p</option>
-                <option value="480p" ${selectedQuality==='480p'?'selected':''}>480p</option>
-                <option value="720p" ${selectedQuality==='720p'?'selected':''}>720p</option>
-                <option value="1080p" ${selectedQuality==='1080p'?'selected':''}>1080p</option>
-            </select>
-        </div>`;
-
         if (stream.detected_type === 'movie') {
-            if (stream.has_resource && (stream.dash?.length || stream.sources?.length)) {
+            if (stream.dash && stream.dash.length > 0) {
                 html += `<div id="dashPlayerContainer" class="movie-player-container" style="display:none;">
                     <video id="dashVideoElement" controls></video>
                 </div>`;
@@ -265,39 +490,23 @@
             html += `<div id="tvPlayerContainer" class="movie-player-container" style="display:none;">
                 <video id="tvVideoElement" controls></video>
             </div>`;
-            html += `<div id="tvPlayerError" class="error-msg" style="display:none;"></div>`;
         }
 
         html += '<div id="streamContainer">' + buildStreamLinks(stream) + '</div>';
-        html += `<button id="loadCaptionsBtn" style="margin-top:1rem; background:var(--card); border:1px solid var(--border); padding:0.5rem 1rem; color:white; border-radius:8px;">Load Subtitles</button>`;
+        html += `<button id="loadCaptionsBtn" style="margin-top:1rem; background:var(--card); border:1px solid var(--border); padding:0.5rem 1rem; color:white; border-radius:8px; cursor:pointer;">Load Subtitles</button>`;
         html += '<div id="captionsList" style="margin-top:1rem;"></div>';
 
         detailContentDiv.innerHTML = html;
 
-        document.getElementById('qualitySelect').addEventListener('change', (e) => {
-            selectedQuality = e.target.value;
-            if (stream.detected_type === 'movie' && dashPlayer) {
-                const video = document.getElementById('dashVideoElement');
-                if (video) dashPlayer.attachSource(getProxyStreamUrl());
-            }
-            if (stream.detected_type === 'tv') {
-                const se = parseInt(document.getElementById('seasonSelect').value);
-                const ep = parseInt(document.getElementById('episodeSelect').value);
-                loadStreamForEpisode(se, ep);
-            }
-        });
-
-        if (stream.detected_type === 'movie' && (stream.dash?.length || stream.sources?.length)) {
+        if (stream.detected_type === 'movie' && stream.dash?.length) {
             const playBtn = document.getElementById('playDashBtn');
             const container = document.getElementById('dashPlayerContainer');
             const video = document.getElementById('dashVideoElement');
             playBtn.addEventListener('click', () => {
                 if (!dashPlayer) {
                     dashPlayer = dashjs.MediaPlayer().create();
-                    dashPlayer.initialize(video, getProxyStreamUrl(), true);
-                } else {
-                    video.play();
-                }
+                    dashPlayer.initialize(video, stream.dash[0].url, true);
+                } else video.play();
                 container.style.display = 'block';
                 video.play();
             });
@@ -342,124 +551,47 @@
     }
 
     function buildStreamLinks(stream) {
-        let html = '<div class="stream-links"><strong>Available sources:</strong><br>';
+        let html = '<div class="stream-links"><strong>Direct links:</strong><br>';
         if(stream.has_resource && stream.sources?.length) {
             stream.sources.forEach(s => {
                 const sizeMB = (s.size/1e6).toFixed(0);
-                html += `<span style="margin:0.3rem 0; display:inline-block; background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">${s.resolution} (${sizeMB}MB)</span> `;
+                const linkUrl = stream.detected_type === 'tv' ? getApiBase() + '/proxy-stream?url=' + encodeURIComponent(s.url) : s.url;
+                html += `<div style="margin:0.3rem 0; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <a href="${linkUrl}" target="_blank" style="background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; text-decoration:none; font-size:0.8rem;">⬇ ${s.resolution} (${sizeMB}MB)</a>
+                    <a href="${linkUrl}" target="_blank" style="font-size:0.75rem; color:var(--accent);">(open)</a>
+                </div>`;
             });
-            stream.dash?.forEach(d => {
-                html += `<span style="margin:0.3rem 0; display:inline-block; background:#3366ff; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">DASH ${d.resolutions} (${d.codecName})</span> `;
-            });
-        } else {
-            html += '<span style="color:var(--muted);">No stream available.</span>';
-        }
+            stream.dash?.forEach(d => html += `<div style="margin:0.3rem 0;"><a href="${d.url}" target="_blank" style="font-size:0.8rem; color:var(--accent);">DASH ${d.resolutions} (${d.codecName})</a></div>`);
+        } else html += '<span style="color:var(--muted);">No stream available.</span>';
         html += '</div>';
         return html;
     }
 
-    function resetPlayer() {
-        if (dashPlayer) {
-            try { dashPlayer.destroy(); } catch(e) {}
-            dashPlayer = null;
-        }
-        const video = document.getElementById('tvVideoElement');
-        if (video) {
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
-            // clone to remove event listeners
-            const newVideo = video.cloneNode(true);
-            video.parentNode.replaceChild(newVideo, video);
-            newVideo.id = 'tvVideoElement';
-            tvVideoElement = newVideo;
-        }
-    }
-
     async function loadStreamForEpisode(se, ep) {
-        log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
-        const container = document.getElementById('tvPlayerContainer');
-        const errorDiv = document.getElementById('tvPlayerError');
-        let video = document.getElementById('tvVideoElement');
-
-        if (!container || !video) {
-            log('Player container not found');
-            return;
-        }
-
-        // Reset everything
-        resetPlayer();
-        video = document.getElementById('tvVideoElement');
-        container.style.display = 'none';
-        if (errorDiv) errorDiv.style.display = 'none';
-
+        log(`Loading stream for S${se} E${ep}`);
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
-            // Log full stream data for debugging
-            log(`Stream data: hasResource=${stream.has_resource}, MP4 count=${stream.sources?.length||0}, DASH count=${stream.dash?.length||0}`);
-            if (stream.dash?.length > 0) {
-                log(`First DASH url: ${stream.dash[0].url}`);
-            }
 
-            if (!stream.has_resource || (stream.sources.length === 0 && stream.dash.length === 0)) {
-                log('No playable source for this episode.');
-                return;
-            }
-
-            // Decide which format to use: prefer DASH, fallback to MP4
-            if (stream.dash && stream.dash.length > 0) {
-                const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
-                log('Using DASH: ' + proxyUrl);
-                dashPlayer = dashjs.MediaPlayer().create();
-                dashPlayer.initialize(video, proxyUrl, true);
-                dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e) => {
-                    log('Dash.js error: ' + JSON.stringify(e.error));
-                    if (errorDiv) {
-                        errorDiv.style.display = 'block';
-                        errorDiv.textContent = 'DASH playback error. Trying MP4 fallback...';
-                    }
-                    // Fallback to MP4
-                    loadStreamWithMP4(se, ep, stream);
-                });
+            const container = document.getElementById('tvPlayerContainer');
+            const video = document.getElementById('tvVideoElement');
+            if (container && video && stream.has_resource && stream.sources.length > 0) {
+                const firstSource = stream.sources[0];
+                const proxyUrl = getApiBase() + '/proxy-stream?url=' + encodeURIComponent(firstSource.url);
+                video.src = proxyUrl;
                 container.style.display = 'block';
-                video.play().catch(() => log('Autoplay blocked – press play'));
+                video.play();
                 tvVideoElement = video;
-            } else if (stream.sources && stream.sources.length > 0) {
-                // No DASH, use MP4 directly
-                loadStreamWithMP4(se, ep, stream);
+            } else if (container) {
+                container.style.display = 'none';
+            }
+
+            const linksContainer = document.getElementById('streamContainer');
+            if (linksContainer) {
+                linksContainer.innerHTML = buildStreamLinks(stream);
             }
         } catch(e) {
             log('Failed to load episode: ' + e.message);
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Error: ' + e.message;
-            }
         }
-    }
-
-    async function loadStreamWithMP4(se, ep, stream) {
-        const container = document.getElementById('tvPlayerContainer');
-        const errorDiv = document.getElementById('tvPlayerError');
-        const video = document.getElementById('tvVideoElement');
-        if (!video) return;
-
-        const proxyUrl = getProxyStreamUrl(se, ep, 'mp4');
-        log('Using MP4: ' + proxyUrl);
-        video.src = proxyUrl;
-        container.style.display = 'block';
-        video.play().catch(() => {});
-        tvVideoElement = video;
-
-        video.onerror = () => {
-            const err = video.error;
-            const msgs = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
-            const msg = msgs[err?.code] || 'Unknown';
-            log(`MP4 error: ${msg}`);
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = `MP4 playback failed (${msg}). The stream may not be available.`;
-            }
-        };
     }
 
     function handleHashChange() {
@@ -486,6 +618,9 @@
         } else {
             searchPage.classList.remove('hidden');
             detailPage.classList.remove('active');
+            if (!hash) {
+                switchCategory('home');
+            }
         }
     }
 
@@ -494,10 +629,6 @@
         window.location.hash = '';
     });
 
-    if (window.location.hash) {
-        handleHashChange();
-    }
-
     searchBtn.addEventListener('click', doSearch);
     searchInput.addEventListener('keydown', (e) => {
         if(e.key === 'Enter') doSearch();
@@ -505,7 +636,13 @@
 
     window.onerror = function(m,s,l,c,e) { log('Unhandled error: ' + m + ' at ' + s + ':' + l); };
     window.onunhandledrejection = function(e) { log('Unhandled rejection: ' + e.reason); };
-    log('Ready. Share URLs like #/detail/slug');
+    
+    // Initialize dashboard
+    log('Ready. Loading dashboard...');
+    loadDashboard();
+    if (window.location.hash) {
+        handleHashChange();
+    }
 })();
 </script>
 </body>
