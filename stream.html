@@ -3,150 +3,214 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Stream</title>
+    <title>🎬 PRIME STREAM</title>
     <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
     <style>
         :root {
-            --bg: #0b0e14; --card: #13171f; --accent: #ff3d71; --text: #e0e0e0;
-            --muted: #888; --border: rgba(255,255,255,0.08);
+            --bg: #0a0c10; --card: #14181f; --accent: #ff3d71; --accent2: #4f8cff;
+            --text: #f0f0f0; --muted: #8a919e; --border: rgba(255,255,255,0.08);
+            --gold: #f5c542;
         }
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 1rem; min-height: 100vh; }
-        .container { max-width: 600px; margin: auto; }
-        header { text-align: center; margin-bottom: 1.5rem; }
-        h1 { font-size: 2rem; background: linear-gradient(135deg, #ff3d71, #3366ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .config { background: var(--card); padding: 0.8rem; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-        .config input { flex: 1; min-width: 200px; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border); background: #000; color: var(--text); }
-        .config button { padding: 0.6rem 1rem; border-radius: 8px; background: var(--accent); color: #fff; border: none; font-weight: bold; }
-        .search-bar { display: flex; gap: 0.5rem; margin: 1rem 0; }
-        .search-bar input { flex: 1; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
-        .search-bar button { padding: 0.8rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-weight: bold; }
-        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 250px; overflow-y: auto; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
-        .movie-card { background: var(--card); border-radius: 14px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; }
-        .movie-card:active { transform: scale(0.97); }
-        .movie-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
-        .movie-card .info { padding: 0.6rem; font-size: 0.85rem; }
-        .movie-card .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        .detail-page { display: none; }
-        .detail-page.active { display: block; }
-        .search-page { display: block; }
-        .search-page.hidden { display: none; }
-        .back-btn { background: none; border: none; color: var(--accent); font-size: 1.2rem; cursor: pointer; margin-bottom: 1rem; padding: 0.3rem 0.6rem; border-radius: 8px; }
-        .back-btn:hover { background: var(--border); }
-        .movie-player-container {
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg); color: var(--text); padding: 1.5rem 1rem;
+            min-height: 100vh; line-height: 1.5;
+            background-image: radial-gradient(circle at 10% 20%, #1a1f2b 0%, #0a0c10 90%);
+        }
+        .container { max-width: 1400px; margin: auto; }
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem;
+        }
+        h1 {
+            font-size: 2.4rem; letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 10%, #ff3d71 50%, #4f8cff 90%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-weight: 700; text-shadow: 0 0 30px rgba(255,61,113,0.3);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .badge {
+            background: var(--card); border: 1px solid var(--border); border-radius: 30px;
+            padding: 0.25rem 0.8rem; font-size: 0.75rem; color: var(--muted); font-weight: 500;
+            letter-spacing: 0.3px; display: inline-flex; align-items: center; gap: 0.3rem;
+        }
+        .config {
+            background: var(--card); padding: 0.6rem 1rem; border-radius: 40px;
+            border: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.5rem;
+            align-items: center; backdrop-filter: blur(10px); box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .config input {
+            flex: 1; min-width: 220px; padding: 0.6rem 1rem; border-radius: 30px;
+            border: 1px solid var(--border); background: #0e1117; color: var(--text);
+            font-size: 0.9rem; outline: none; transition: 0.2s;
+        }
+        .config input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,61,113,0.15); }
+        .config button, .search-bar button, .category-bar button {
+            padding: 0.6rem 1.5rem; border-radius: 30px; background: var(--accent);
+            color: #fff; border: none; font-weight: 600; cursor: pointer; transition: 0.2s;
+            letter-spacing: 0.3px; border: 1px solid transparent;
+        }
+        .config button:hover, .search-bar button:hover { background: #e62e5c; transform: translateY(-1px); }
+        #status {
+            background: #12171e; border: 1px solid #2a2f3a; border-radius: 20px;
+            padding: 0.9rem 1.2rem; margin: 1rem 0 1.2rem; font-size: 0.85rem;
+            color: #bfc6d4; white-space: pre-wrap; max-height: 180px; overflow-y: auto;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.4); font-family: 'SF Mono', monospace;
+        }
+        .category-bar {
+            display: flex; flex-wrap: wrap; gap: 0.7rem; margin: 1rem 0 1.5rem;
+            justify-content: center;
+        }
+        .category-btn {
+            background: #171c24; border: 1px solid #2a2f3a; color: #d0d6e0;
+            padding: 0.6rem 1.4rem; border-radius: 40px; font-weight: 500; cursor: pointer;
+            transition: all 0.2s; font-size: 0.85rem; letter-spacing: 0.2px;
+        }
+        .category-btn:hover { border-color: var(--accent); color: #fff; background: #1f2530; }
+        .category-btn.active { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+        .search-bar { display: flex; gap: 0.7rem; margin: 1rem 0; justify-content: center; }
+        .search-bar input {
+            flex: 1; max-width: 500px; padding: 0.9rem 1.5rem; border-radius: 50px;
+            border: 1px solid var(--border); background: #161b23; color: var(--text);
+            font-size: 1rem; outline: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .search-bar button { padding: 0.9rem 2.2rem; background: var(--accent2); }
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 1.5rem; margin: 1.8rem 0;
+        }
+        .movie-card {
+            background: var(--card); border-radius: 20px; overflow: hidden; cursor: pointer;
+            border: 1px solid var(--border); transition: 0.25s ease; box-shadow: 0 10px 20px rgba(0,0,0,0.4);
             position: relative;
-            width: 100%;
-            height: 0;
-            padding-bottom: 56.25%;
-            margin: 1rem 0;
-            border-radius: 12px;
-            overflow: hidden;
-            background: #000;
         }
-        .movie-player-container video {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-        }
-        .play-direct-btn { display: block; background: #28a745; color: #fff; padding: 0.8rem; text-align: center; border-radius: 12px; margin: 1rem 0; font-weight: bold; text-decoration: none; font-size: 1rem; border: none; width: 100%; cursor: pointer; }
-        .unavailable-msg { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 1.5rem; text-align: center; color: var(--muted); margin: 1rem 0; }
-        .episode-selector { display: flex; gap: 0.5rem; margin: 1rem 0; align-items: center; flex-wrap: wrap; }
-        .episode-selector select { padding: 0.5rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; flex: 1; min-width: 100px; }
-        .stream-links a { display: inline-block; margin: 0.3rem 0.5rem 0.3rem 0; padding: 0.5rem 0.8rem; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.8rem; }
-        .loading-text { color: var(--muted); text-align: center; padding: 1rem; }
-        .quality-selector { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
-        .quality-selector select { padding: 0.4rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
-        .error-msg { color: #ff6b6b; margin-top: 0.5rem; }
-        .edit-btn { 
-            background: var(--card); 
-            border: 1px solid var(--border); 
-            color: var(--muted); 
-            padding: 0.3rem 0.6rem; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-size: 0.7rem;
-            margin-top: 0.3rem;
+        .movie-card:hover { transform: translateY(-5px); border-color: rgba(255,61,113,0.5); box-shadow: 0 18px 30px rgba(0,0,0,0.6); }
+        .movie-card:active { transform: scale(0.98); }
+        .movie-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; transition: 0.3s; }
+        .movie-card:hover img { filter: brightness(0.8); }
+        .movie-card .info { padding: 0.8rem; font-size: 0.9rem; }
+        .movie-card .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.2rem; }
+        .movie-card .meta { font-size: 0.75rem; color: var(--muted); display: flex; gap: 0.5rem; align-items: center; }
+        .edit-btn {
+            position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.2); color: #ddd; padding: 0.2rem 0.5rem;
+            border-radius: 20px; font-size: 0.7rem; cursor: pointer; backdrop-filter: blur(4px);
             transition: 0.2s;
         }
-        .edit-btn:hover { color: var(--accent); border-color: var(--accent); }
+        .edit-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+        .detail-page { display: none; }
+        .detail-page.active { display: block; animation: fadeIn 0.3s; }
+        .search-page.hidden { display: none; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .back-btn {
+            background: none; border: none; color: var(--accent); font-size: 1.2rem; cursor: pointer;
+            margin-bottom: 1.5rem; padding: 0.4rem 1rem; border-radius: 30px; transition: 0.2s;
+            display: inline-flex; align-items: center; gap: 0.5rem;
+        }
+        .back-btn:hover { background: rgba(255,61,113,0.1); }
+        .movie-player-container {
+            position: relative; width: 100%; height: 0; padding-bottom: 56.25%;
+            margin: 1.5rem 0; border-radius: 24px; overflow: hidden; background: #000;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.7); border: 1px solid #2a2f3a;
+        }
+        .movie-player-container video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .play-direct-btn {
+            display: block; background: #28a745; color: #fff; padding: 1rem; text-align: center;
+            border-radius: 30px; margin: 1.2rem 0; font-weight: 700; text-decoration: none;
+            font-size: 1.1rem; border: none; width: 100%; cursor: pointer; transition: 0.2s;
+            letter-spacing: 0.5px; box-shadow: 0 8px 18px rgba(40,167,69,0.3);
+        }
+        .play-direct-btn:hover { background: #218838; transform: translateY(-2px); }
+        .unavailable-msg {
+            background: #1a1f26; border: 1px solid #333; border-radius: 20px; padding: 2rem;
+            text-align: center; color: var(--muted); margin: 1.5rem 0;
+        }
+        .episode-selector { display: flex; gap: 1rem; margin: 1.5rem 0; align-items: center; flex-wrap: wrap; justify-content: center; }
+        .episode-selector select {
+            padding: 0.8rem 1.5rem; background: #171c24; color: var(--text);
+            border: 1px solid var(--border); border-radius: 30px; min-width: 140px;
+            font-weight: 500; cursor: pointer; outline: none;
+        }
+        .stream-links a { display: inline-block; margin: 0.3rem 0.5rem 0.3rem 0; padding: 0.5rem 1rem; background: var(--accent); color: #fff; border-radius: 30px; text-decoration: none; font-size: 0.8rem; }
+        .loading-text { color: var(--muted); text-align: center; padding: 2rem; font-style: italic; }
+        .quality-selector { display: flex; align-items: center; gap: 0.7rem; margin: 1rem 0; justify-content: center; }
+        .quality-selector select {
+            padding: 0.5rem 1.2rem; background: #171c24; color: var(--text);
+            border: 1px solid var(--border); border-radius: 30px; font-weight: 500;
+        }
+        .error-msg { color: #ff6b6b; margin-top: 0.8rem; text-align: center; }
+        .caption-track-selector {
+            background: #1a1f26; border: 1px solid #333; border-radius: 20px;
+            padding: 1rem; margin: 1rem 0; display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center;
+        }
+        .caption-track-btn {
+            background: #2a2f3a; border: none; color: #ddd; padding: 0.4rem 1rem;
+            border-radius: 20px; cursor: pointer; transition: 0.2s; font-size: 0.8rem;
+        }
+        .caption-track-btn.active { background: var(--accent); color: white; }
         .edit-modal {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none; justify-content: center;
+            align-items: center; z-index: 1000; backdrop-filter: blur(6px);
         }
         .edit-modal.active { display: flex; }
         .edit-modal-content {
-            background: var(--card);
-            padding: 1.5rem;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 400px;
-            border: 1px solid var(--border);
+            background: #161b23; padding: 2rem; border-radius: 30px; width: 90%;
+            max-width: 420px; border: 1px solid #2a2f3a; box-shadow: 0 30px 50px rgba(0,0,0,0.7);
         }
-        .edit-modal-content h3 { margin-bottom: 1rem; }
+        .edit-modal-content h3 { margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 600; }
         .edit-modal-content input, .edit-modal-content textarea {
-            width: 100%;
-            padding: 0.6rem;
-            margin-bottom: 1rem;
-            background: #000;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
+            width: 100%; padding: 0.8rem 1rem; margin-bottom: 1rem; background: #0e1117;
+            border: 1px solid #2a2f3a; border-radius: 15px; color: var(--text); font-size: 0.9rem;
         }
-        .edit-modal-content textarea { min-height: 100px; resize: vertical; }
-        .edit-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-        .edit-modal-actions button {
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .save-btn { background: var(--accent); color: #fff; }
-        .cancel-btn { background: var(--border); color: var(--text); }
+        .edit-modal-actions { display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1rem; }
+        .save-btn { background: var(--accent); color: #fff; padding: 0.8rem 1.8rem; border-radius: 30px; border: none; font-weight: 600; }
+        .cancel-btn { background: #2a2f3a; color: var(--text); padding: 0.8rem 1.8rem; border-radius: 30px; border: none; }
+        .section-title { font-size: 1.6rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .caption-badge { background: var(--accent2); padding: 0.2rem 0.7rem; border-radius: 20px; font-size: 0.7rem; color: white; }
     </style>
 </head>
 <body>
 <div class="container">
     <div id="searchPage" class="search-page">
-        <header><h1>🎬 Stream</h1></header>
-        <div class="config">
-            <input type="text" id="apiBase" value="" placeholder="API base URL (leave empty for same site)">
-            <button onclick="testConnection()">Test</button>
-        </div>
-        <div id="status">Status: ready</div>
+        <header>
+            <h1>🎬 PRIME STREAM</h1>
+            <div class="config">
+                <input type="text" id="apiBase" value="" placeholder="API base URL">
+                <button onclick="testConnection()">⚡ Test</button>
+            </div>
+        </header>
+        <div id="status">✨ ready</div>
         <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Enter movie or series...">
-            <button id="searchBtn">Search</button>
+            <input type="text" id="searchInput" placeholder="Search movies, series, tagalog...">
+            <button id="searchBtn">🔍 Search</button>
+        </div>
+        <div class="category-bar" id="categoryBar">
+            <button class="category-btn active" data-cat="popular">🔥 Popular</button>
+            <button class="category-btn" data-cat="trending">📈 Trending</button>
+            <button class="category-btn" data-cat="latest">🆕 Latest</button>
+            <button class="category-btn" data-cat="tagalog">🇵🇭 Tagalog</button>
+            <button class="category-btn" data-cat="tagalog_dubbed">🗣️ Tagalog Dubbed</button>
+            <button class="category-btn" data-cat="short_films">🎞️ Short Films</button>
         </div>
         <div id="results" class="grid"></div>
-        <div id="loading" class="loading-text" style="display:none;">Loading...</div>
+        <div id="loading" class="loading-text" style="display:none;">⏳ Loading premium content...</div>
     </div>
 
     <div id="detailPage" class="detail-page">
-        <button id="backBtn" class="back-btn">← Back to search</button>
+        <button id="backBtn" class="back-btn">← Back to discovery</button>
         <div id="detailContent"></div>
     </div>
 </div>
 
-<!-- Edit Modal -->
 <div id="editModal" class="edit-modal">
     <div class="edit-modal-content">
-        <h3>Edit Result</h3>
-        <label for="editName">Name:</label>
+        <h3>✏️ Edit Result</h3>
         <input type="text" id="editName" placeholder="Title">
-        <label for="editYear">Year:</label>
         <input type="text" id="editYear" placeholder="Year">
-        <label for="editRating">Rating:</label>
         <input type="text" id="editRating" placeholder="Rating">
-        <label for="editPoster">Poster URL:</label>
         <input type="text" id="editPoster" placeholder="Poster URL">
         <div class="edit-modal-actions">
             <button class="cancel-btn" onclick="closeEditModal()">Cancel</button>
@@ -168,6 +232,7 @@
     const detailContentDiv = document.getElementById('detailContent');
     const backBtn = document.getElementById('backBtn');
     const editModal = document.getElementById('editModal');
+    const categoryBar = document.getElementById('categoryBar');
 
     let currentSubjectId = null;
     let currentSlug = null;
@@ -175,8 +240,7 @@
     let dashPlayer = null;
     let tvVideoElement = null;
     let selectedQuality = '480p';
-    
-    // Infinite scroll variables
+    let activeCategory = 'popular';
     let currentPage = 1;
     let totalPages = 1;
     let isLoading = false;
@@ -184,94 +248,80 @@
     let currentSearchQuery = '';
     let editingCardIndex = null;
     let searchResults = [];
+    let availableCaptions = [];
 
-    function log(msg) {
-        statusDiv.textContent += '\n' + msg;
-        console.log(msg);
-    }
-
-    function getApiBase() {
-        return apiBaseInput.value.replace(/\/+$/, '');
-    }
+    function log(msg) { statusDiv.textContent += '\n' + msg; console.log(msg); }
+    function getApiBase() { return apiBaseInput.value.replace(/\/+$/, ''); }
 
     async function fetchJSON(path) {
         const url = getApiBase() + path;
-        log('Fetching: ' + url);
-        const res = await fetch(url);
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`HTTP ${res.status}: ${text.substring(0, 200)}`);
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch(e) {
+            log('Fetch error: ' + e.message);
+            throw e;
         }
-        return res.json();
     }
 
     window.testConnection = async function() {
-        try {
-            await fetchJSON('/home');
-            log('✅ Connection successful!');
-        } catch(e) {
-            log('❌ Connection failed: ' + e.message);
-        }
+        try { await fetchJSON('/home'); log('✅ Connection successful!'); }
+        catch(e) { log('❌ Connection failed: ' + e.message); }
     };
+
+    function getCategoryPath(cat) {
+        const map = {
+            popular: '/popular', trending: '/trending', latest: '/latest',
+            tagalog: '/tagalog', tagalog_dubbed: '/tagalog-dubbed', short_films: '/short-films'
+        };
+        return map[cat] || '/popular';
+    }
+
+    async function loadCategory(cat, page = 1) {
+        activeCategory = cat;
+        if (page === 1) { currentPage = 1; searchResults = []; resultsGrid.innerHTML = ''; loadingDiv.style.display = 'block'; }
+        isLoading = true;
+        try {
+            const data = await fetchJSON(getCategoryPath(cat) + '?page=' + page);
+            const items = data.items || [];
+            totalPages = data.total_pages || 1;
+            if (page === 1) searchResults = items; else searchResults = [...searchResults, ...items];
+            renderResults(searchResults);
+        } catch(e) {
+            log('Category error: ' + e.message);
+            if (page === 1) resultsGrid.innerHTML = '<div style="color:#ff6b6b;">Category load failed</div>';
+        }
+        isLoading = false; loadingDiv.style.display = 'none';
+        hasMoreResults = currentPage < totalPages;
+    }
 
     async function doSearch(page = 1) {
         const q = searchInput.value.trim();
         if(!q) return;
-        
-        if (page === 1) {
-            currentPage = 1;
-            currentSearchQuery = q;
-            resultsGrid.innerHTML = '';
-            searchResults = [];
-            loadingDiv.style.display = 'block';
-            log('Searching: ' + q);
-        }
-        
+        if (page === 1) { currentPage = 1; currentSearchQuery = q; resultsGrid.innerHTML = ''; searchResults = []; loadingDiv.style.display = 'block'; }
         isLoading = true;
-        
         try {
             const data = await fetchJSON('/search?q=' + encodeURIComponent(q) + '&page=' + page);
             const items = data.items || [];
-            
-            if (page === 1) {
-                log('Found ' + items.length + ' results.');
-                totalPages = data.total_pages || Math.ceil(items.length / 10);
-                hasMoreResults = page < totalPages;
-            }
-            
-            searchResults = [...searchResults, ...items];
+            totalPages = data.total_pages || 1;
+            if (page === 1) searchResults = items; else searchResults = [...searchResults, ...items];
             renderResults(searchResults);
-            
-            if (items.length === 0 && page === 1) {
-                resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">Nothing found</div>';
-            }
-        } catch(e) {
-            log('Search error: ' + e.message);
-            if (page === 1) {
-                resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1;">Search failed</div>';
-            }
-        }
-        
-        isLoading = false;
-        if (page === 1) {
-            loadingDiv.style.display = 'none';
-        }
+        } catch(e) { log('Search error: ' + e.message); }
+        isLoading = false; loadingDiv.style.display = 'none';
+        hasMoreResults = currentPage < totalPages;
     }
 
     function renderResults(items) {
-        if(!items.length) {
-            resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">Nothing found</div>';
-            return;
-        }
-        
+        if(!items.length) { resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">✨ Nothing found</div>'; return; }
         resultsGrid.innerHTML = items.map((item, index) => {
             const poster = item.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster';
             return `<div class="movie-card" data-index="${index}" data-slug="${item.slug||''}" data-subjectid="${item.subject_id||''}">
                 <img src="${poster}" alt="${item.name||''}">
+                <button class="edit-btn" onclick="event.stopPropagation(); openEditModal(${index})">✏️ Edit</button>
                 <div class="info">
                     <div class="title">${item.name||'Untitled'}</div>
-                    <div style="font-size:0.75rem; color:var(--muted);">${item.year||''} ${item.rating?'⭐'+item.rating:''}</div>
-                    <button class="edit-btn" onclick="event.stopPropagation(); openEditModal(${index})">✏️ Edit</button>
+                    <div class="meta"><span>${item.year||'—'}</span> ${item.rating?'<span>⭐ '+item.rating+'</span>':''}</div>
                 </div>
             </div>`;
         }).join('');
@@ -279,90 +329,67 @@
 
     resultsGrid.addEventListener('click', (e) => {
         if (e.target.classList.contains('edit-btn')) return;
-        
         const card = e.target.closest('.movie-card');
         if(!card) return;
-        const slug = card.dataset.slug;
-        const subjectId = card.dataset.subjectid;
-        if(!slug || !subjectId) { log('Missing slug or ID.'); return; }
-        navigateToDetail(slug, subjectId);
+        const slug = card.dataset.slug, subjectId = card.dataset.subjectid;
+        if(slug && subjectId) navigateToDetail(slug, subjectId);
     });
 
-    // Infinite scroll implementation
     window.addEventListener('scroll', () => {
-        if (isLoading || !hasMoreResults) return;
-        
+        if (isLoading || !hasMoreResults || !searchPage.classList.contains('hidden')) return;
         const scrollPosition = window.innerHeight + window.scrollY;
         const pageHeight = document.documentElement.offsetHeight;
-        
-        // Load more when user is near the bottom (within 200px)
-        if (scrollPosition >= pageHeight - 200) {
-            loadMoreResults();
+        if (scrollPosition >= pageHeight - 300) {
+            if (currentSearchQuery.trim()) loadMoreSearch(); else loadMoreCategory();
         }
     });
 
-    async function loadMoreResults() {
-        if (currentPage >= totalPages) {
-            hasMoreResults = false;
-            return;
-        }
-        
-        currentPage++;
-        await doSearch(currentPage);
-    }
+    async function loadMoreSearch() { if (currentPage < totalPages) { currentPage++; await doSearch(currentPage); } }
+    async function loadMoreCategory() { if (currentPage < totalPages) { currentPage++; await loadCategory(activeCategory, currentPage); } }
 
-    // Edit functionality
+    categoryBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.category-btn');
+        if(!btn) return;
+        document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadCategory(btn.dataset.cat);
+    });
+
     window.openEditModal = function(index) {
-        editingCardIndex = index;
-        const item = searchResults[index];
-        
+        editingCardIndex = index; const item = searchResults[index];
         document.getElementById('editName').value = item.name || '';
         document.getElementById('editYear').value = item.year || '';
         document.getElementById('editRating').value = item.rating || '';
         document.getElementById('editPoster').value = item.poster_url || '';
-        
         editModal.classList.add('active');
     };
-
-    window.closeEditModal = function() {
-        editModal.classList.remove('active');
-        editingCardIndex = null;
-    };
-
+    window.closeEditModal = function() { editModal.classList.remove('active'); editingCardIndex = null; };
     window.saveEdit = function() {
         if (editingCardIndex === null) return;
-        
         const item = searchResults[editingCardIndex];
         item.name = document.getElementById('editName').value;
         item.year = document.getElementById('editYear').value;
         item.rating = document.getElementById('editRating').value;
         item.poster_url = document.getElementById('editPoster').value;
-        
         renderResults(searchResults);
         closeEditModal();
-        log('Result updated: ' + item.name);
+        log('Result updated');
     };
 
-    function navigateToDetail(slug, subjectId) {
-        window.location.hash = `#/detail/${slug}`;
-    }
+    function navigateToDetail(slug, subjectId) { window.location.hash = `#/detail/${slug}`; }
 
     async function loadDetail(slug, subjectId) {
-        currentSubjectId = subjectId;
-        currentSlug = slug;
-        searchPage.classList.add('hidden');
-        detailPage.classList.add('active');
-        detailContentDiv.innerHTML = '<div class="loading-text">Loading details...</div>';
-        log('Loading detail: ' + slug);
+        currentSubjectId = subjectId; currentSlug = slug;
+        searchPage.classList.add('hidden'); detailPage.classList.add('active');
+        detailContentDiv.innerHTML = '<div class="loading-text">⏳ Loading premium detail...</div>';
         try {
             const detail = await fetchJSON('/detail/' + slug);
             const stream = await fetchJSON('/api/stream/' + subjectId + '?detail_path=' + slug);
             currentDetailData = detail.data || detail;
-            log('Detected type: ' + stream.detected_type + ', has_resource: ' + stream.has_resource);
+            availableCaptions = [];
             renderDetailPage(currentDetailData, stream);
         } catch(e) {
-            detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error: ' + e.message + '</div>';
-            log('Error: ' + e.message);
+            detailContentDiv.innerHTML = `<div style="color:#ff6b6b;">Error: ${e.message}</div>`;
         }
     }
 
@@ -372,72 +399,84 @@
         return url;
     }
 
+    async function fetchCaptions(se, ep) {
+        try {
+            const data = await fetchJSON(`/api/stream/${currentSubjectId}/captions?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
+            availableCaptions = data.captions || [];
+            return availableCaptions;
+        } catch(e) { log('caption fetch failed'); return []; }
+    }
+
+    function renderCaptionSelector() {
+        const container = document.getElementById('captionSelectorContainer');
+        if(!container) return;
+        container.innerHTML = '';
+        if(availableCaptions.length === 0) { container.innerHTML = '<span style="color:var(--muted)">No subtitles available</span>'; return; }
+        availableCaptions.forEach((cap, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'caption-track-btn' + (i === 0 ? ' active' : '');
+            btn.textContent = cap.language || `Track ${i+1}`;
+            btn.onclick = () => {
+                document.querySelectorAll('.caption-track-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const video = document.getElementById('tvVideoElement') || document.getElementById('dashVideoElement');
+                if(video) {
+                    // remove old tracks
+                    const oldTracks = video.querySelectorAll('track');
+                    oldTracks.forEach(t => t.remove());
+                    const track = document.createElement('track');
+                    track.kind = 'subtitles'; track.label = cap.language || 'default'; track.src = cap.url; track.default = true;
+                    video.appendChild(track);
+                    video.textTracks[0].mode = 'showing';
+                }
+            };
+            container.appendChild(btn);
+        });
+    }
+
     function renderDetailPage(detail, stream) {
         if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
-        if (tvVideoElement) {
-            tvVideoElement.pause();
-            tvVideoElement.removeAttribute('src');
-            tvVideoElement.load();
-            tvVideoElement = null;
-        }
+        if (tvVideoElement) { tvVideoElement.pause(); tvVideoElement.removeAttribute('src'); tvVideoElement.load(); tvVideoElement = null; }
 
-        const title = detail.subject?.title || detail.title || detail.name || 'Unknown';
+        const title = detail.subject?.title || detail.title || 'Unknown';
         const year = (detail.subject?.releaseDate || detail.releaseDate || '').slice(0,4);
-        const rating = detail.subject?.imdbRatingValue || detail.imdbRatingValue || '';
-        const desc = detail.subject?.description || detail.description || '';
+        const rating = detail.subject?.imdbRatingValue || '';
+        const desc = detail.subject?.description || '';
 
-        let html = `<h2>${title} (${year})</h2>`;
-        html += `<div style="color:var(--muted); margin-bottom:1rem;">${rating ? '⭐ ' + rating : ''}</div>`;
-        if(desc) html += `<p>${desc}</p>`;
-
-        html += `
-        <div class="quality-selector">
-            <span>Quality:</span>
-            <select id="qualitySelect">
-                <option value="360p" ${selectedQuality==='360p'?'selected':''}>360p</option>
-                <option value="480p" ${selectedQuality==='480p'?'selected':''}>480p</option>
-                <option value="720p" ${selectedQuality==='720p'?'selected':''}>720p</option>
-                <option value="1080p" ${selectedQuality==='1080p'?'selected':''}>1080p</option>
-            </select>
-        </div>`;
+        let html = `<div style="display:flex; flex-wrap:wrap; gap:1.5rem; align-items:flex-start;">`;
+        html += `<div style="flex:1; min-width:280px;"><h2 style="font-size:2rem;">${title} <span style="color:var(--muted)">(${year})</span></h2>`;
+        html += `<div style="display:flex; gap:1rem; margin:0.5rem 0;"><span>⭐ ${rating||'—'}</span></div>`;
+        if(desc) html += `<p style="color:var(--muted);">${desc}</p>`;
+        html += `<div class="quality-selector"><span>⚙️ Quality:</span><select id="qualitySelect">
+            <option value="360p" ${selectedQuality==='360p'?'selected':''}>360p</option>
+            <option value="480p" ${selectedQuality==='480p'?'selected':''}>480p</option>
+            <option value="720p" ${selectedQuality==='720p'?'selected':''}>720p</option>
+            <option value="1080p" ${selectedQuality==='1080p'?'selected':''}>1080p</option>
+        </select></div>`;
 
         if (stream.detected_type === 'movie') {
-            if (stream.has_resource && (stream.dash?.length || stream.sources?.length)) {
-                html += `<div id="dashPlayerContainer" class="movie-player-container" style="display:none;">
-                    <video id="dashVideoElement" controls></video>
-                </div>`;
+            if (stream.has_resource) {
+                html += `<div id="dashPlayerContainer" class="movie-player-container" style="display:none;"><video id="dashVideoElement" controls></video></div>`;
                 html += `<button id="playDashBtn" class="play-direct-btn">▶ Play Movie (Ad‑Free)</button>`;
             } else {
-                html += `<div class="unavailable-msg">
-                    <p>🚫 Stream not available</p>
-                    <p>This movie doesn't have an ad‑free stream right now.</p>
-                </div>`;
+                html += `<div class="unavailable-msg">🚫 Stream not available</div>`;
             }
         }
 
         if (stream.detected_type === 'tv' && detail.resource?.seasons?.length) {
             const seasons = detail.resource.seasons;
             const currentSeason = seasons.find(s => s.se === stream.se) || seasons[0];
-
-            html += '<div class="episode-selector">';
-            html += '<select id="seasonSelect">';
-            seasons.forEach(s => html += `<option value="${s.se}" ${s.se === currentSeason.se ? 'selected' : ''}>Season ${s.se}</option>`);
-            html += '</select>';
-            html += '<select id="episodeSelect">';
-            for (let ep = 1; ep <= currentSeason.maxEp; ep++) html += `<option value="${ep}" ${ep === stream.ep ? 'selected' : ''}>Ep ${ep}</option>`;
-            html += '</select>';
-            html += '</div>';
-
-            html += `<div id="tvPlayerContainer" class="movie-player-container" style="display:none;">
-                <video id="tvVideoElement" controls></video>
-            </div>`;
-            html += `<div id="tvPlayerError" class="error-msg" style="display:none;"></div>`;
+            html += '<div class="episode-selector"><select id="seasonSelect">';
+            seasons.forEach(s => html += `<option value="${s.se}" ${s.se===currentSeason.se?'selected':''}>Season ${s.se}</option>`);
+            html += '</select><select id="episodeSelect">';
+            for(let ep=1; ep<=currentSeason.maxEp; ep++) html += `<option value="${ep}" ${ep===stream.ep?'selected':''}>Ep ${ep}</option>`;
+            html += '</select></div>';
+            html += `<div id="tvPlayerContainer" class="movie-player-container" style="display:none;"><video id="tvVideoElement" controls></video></div>`;
+            html += `<div id="tvPlayerError" class="error-msg"></div>`;
         }
-
-        html += '<div id="streamContainer">' + buildStreamLinks(stream) + '</div>';
-        html += `<button id="loadCaptionsBtn" style="margin-top:1rem; background:var(--card); border:1px solid var(--border); padding:0.5rem 1rem; color:white; border-radius:8px;">Load Subtitles</button>`;
-        html += '<div id="captionsList" style="margin-top:1rem;"></div>';
-
+        html += `<div id="captionSelectorContainer" class="caption-track-selector"><span>📝 Subtitles: </span></div>`;
+        html += `<div id="streamContainer">${buildStreamLinks(stream)}</div>`;
+        html += '</div></div>';
         detailContentDiv.innerHTML = html;
 
         document.getElementById('qualitySelect').addEventListener('change', (e) => {
@@ -445,27 +484,25 @@
             if (stream.detected_type === 'movie' && dashPlayer) {
                 const video = document.getElementById('dashVideoElement');
                 if (video) dashPlayer.attachSource(getProxyStreamUrl());
-            }
-            if (stream.detected_type === 'tv') {
+            } else if(stream.detected_type === 'tv') {
                 const se = parseInt(document.getElementById('seasonSelect').value);
                 const ep = parseInt(document.getElementById('episodeSelect').value);
                 loadStreamForEpisode(se, ep);
             }
         });
 
-        if (stream.detected_type === 'movie' && (stream.dash?.length || stream.sources?.length)) {
-            const playBtn = document.getElementById('playDashBtn');
-            const container = document.getElementById('dashPlayerContainer');
-            const video = document.getElementById('dashVideoElement');
-            playBtn.addEventListener('click', () => {
+        if (stream.detected_type === 'movie' && stream.has_resource) {
+            document.getElementById('playDashBtn').addEventListener('click', async () => {
+                const container = document.getElementById('dashPlayerContainer');
+                const video = document.getElementById('dashVideoElement');
                 if (!dashPlayer) {
                     dashPlayer = dashjs.MediaPlayer().create();
                     dashPlayer.initialize(video, getProxyStreamUrl(), true);
-                } else {
-                    video.play();
                 }
                 container.style.display = 'block';
                 video.play();
+                await fetchCaptions(0,0);
+                renderCaptionSelector();
             });
         }
 
@@ -473,199 +510,82 @@
             const seasonSelect = document.getElementById('seasonSelect');
             const episodeSelect = document.getElementById('episodeSelect');
             const seasons = detail.resource.seasons;
-
             seasonSelect.addEventListener('change', () => {
                 const selSeason = parseInt(seasonSelect.value);
                 const obj = seasons.find(s => s.se === selSeason);
-                if (obj) {
-                    episodeSelect.innerHTML = '';
-                    for (let ep = 1; ep <= obj.maxEp; ep++) {
-                        episodeSelect.innerHTML += `<option value="${ep}">Ep ${ep}</option>`;
-                    }
-                    loadStreamForEpisode(selSeason, 1);
-                }
+                if(obj) { episodeSelect.innerHTML = ''; for(let ep=1; ep<=obj.maxEp; ep++) episodeSelect.innerHTML += `<option value="${ep}">Ep ${ep}</option>`; loadStreamForEpisode(selSeason, 1); }
             });
-
-            episodeSelect.addEventListener('change', () => {
-                const se = parseInt(seasonSelect.value);
-                const ep = parseInt(episodeSelect.value);
-                loadStreamForEpisode(se, ep);
-            });
-
-            const initialSe = parseInt(seasonSelect.value);
-            const initialEp = parseInt(episodeSelect.value);
-            loadStreamForEpisode(initialSe, initialEp);
+            episodeSelect.addEventListener('change', () => loadStreamForEpisode(parseInt(seasonSelect.value), parseInt(episodeSelect.value)));
+            loadStreamForEpisode(parseInt(seasonSelect.value), parseInt(episodeSelect.value));
         }
-
-        document.getElementById('loadCaptionsBtn').addEventListener('click', async () => {
-            const capDiv = document.getElementById('captionsList');
-            capDiv.innerHTML = 'Loading...';
-            try {
-                const data = await fetchJSON('/api/stream/' + currentSubjectId + '/captions?detail_path=' + currentSlug + '&se=' + stream.se + '&ep=' + stream.ep);
-                capDiv.innerHTML = data.count > 0 ? data.captions.map(c => `<div style="margin:0.2rem 0;"><a href="${c.url}" target="_blank">${c.language||'Unknown'} (${c.format||'vtt'})</a></div>`).join('') : 'No captions found.';
-            } catch(e) { capDiv.innerHTML = '<span style="color:#ff6b6b;">Failed: ' + e.message + '</span>'; }
-        });
     }
 
     function buildStreamLinks(stream) {
-        let html = '<div class="stream-links"><strong>Available sources:</strong><br>';
-        if(stream.has_resource && stream.sources?.length) {
-            stream.sources.forEach(s => {
-                const sizeMB = (s.size/1e6).toFixed(0);
-                html += `<span style="margin:0.3rem 0; display:inline-block; background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">${s.resolution} (${sizeMB}MB)</span> `;
-            });
-            stream.dash?.forEach(d => {
-                html += `<span style="margin:0.3rem 0; display:inline-block; background:#3366ff; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">DASH ${d.resolutions} (${d.codecName})</span> `;
-            });
-        } else {
-            html += '<span style="color:var(--muted);">No stream available.</span>';
-        }
-        html += '</div>';
-        return html;
-    }
-
-    function resetPlayer() {
-        if (dashPlayer) {
-            try { dashPlayer.destroy(); } catch(e) {}
-            dashPlayer = null;
-        }
-        const video = document.getElementById('tvVideoElement');
-        if (video) {
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
-            const newVideo = video.cloneNode(true);
-            video.parentNode.replaceChild(newVideo, video);
-            newVideo.id = 'tvVideoElement';
-            tvVideoElement = newVideo;
-        }
+        let html = '<div class="stream-links"><strong>🌐 Sources:</strong> ';
+        if(stream.sources?.length) stream.sources.forEach(s => html += `<span style="background:#28a745;padding:0.3rem 0.8rem;border-radius:20px;font-size:0.8rem;">${s.resolution}</span> `);
+        if(stream.dash?.length) html += '<span style="background:#3366ff;padding:0.3rem 0.8rem;border-radius:20px;font-size:0.8rem;">DASH</span> ';
+        if(!stream.has_resource) html += '<span>none</span>';
+        html += '</div>'; return html;
     }
 
     async function loadStreamForEpisode(se, ep) {
-        log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
         const container = document.getElementById('tvPlayerContainer');
         const errorDiv = document.getElementById('tvPlayerError');
         let video = document.getElementById('tvVideoElement');
-
-        if (!container || !video) {
-            log('Player container not found');
-            return;
-        }
-
-        resetPlayer();
-        video = document.getElementById('tvVideoElement');
+        if(!container || !video) return;
+        if(dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
         container.style.display = 'none';
-        if (errorDiv) errorDiv.style.display = 'none';
-
+        if(errorDiv) errorDiv.style.display = 'none';
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
-            log(`Stream data: hasResource=${stream.has_resource}, MP4 count=${stream.sources?.length||0}, DASH count=${stream.dash?.length||0}`);
-            if (stream.dash?.length > 0) {
-                log(`First DASH url: ${stream.dash[0].url}`);
-            }
-
-            if (!stream.has_resource || (stream.sources.length === 0 && stream.dash.length === 0)) {
-                log('No playable source for this episode.');
-                return;
-            }
-
-            if (stream.dash && stream.dash.length > 0) {
+            const captions = await fetchCaptions(se, ep);
+            renderCaptionSelector();
+            if (!stream.has_resource) { log('No stream for episode'); return; }
+            if (stream.dash?.length) {
                 const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
-                log('Using DASH: ' + proxyUrl);
                 dashPlayer = dashjs.MediaPlayer().create();
                 dashPlayer.initialize(video, proxyUrl, true);
-                dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e) => {
-                    log('Dash.js error: ' + JSON.stringify(e.error));
-                    if (errorDiv) {
-                        errorDiv.style.display = 'block';
-                        errorDiv.textContent = 'DASH playback error. Trying MP4 fallback...';
-                    }
-                    loadStreamWithMP4(se, ep, stream);
-                });
                 container.style.display = 'block';
-                video.play().catch(() => log('Autoplay blocked – press play'));
                 tvVideoElement = video;
-            } else if (stream.sources && stream.sources.length > 0) {
-                loadStreamWithMP4(se, ep, stream);
+                video.play().catch(()=>{});
+                if(captions.length) {
+                    const track = document.createElement('track'); track.kind='subtitles'; track.label=captions[0].language||'default'; track.src=captions[0].url; track.default=true;
+                    video.appendChild(track); video.textTracks[0].mode='showing';
+                }
+            } else if (stream.sources?.length) {
+                video.src = getProxyStreamUrl(se, ep, 'mp4');
+                container.style.display = 'block';
+                tvVideoElement = video;
+                video.play().catch(()=>{});
+                if(captions.length) { const track = document.createElement('track'); track.kind='subtitles'; track.label=captions[0].language||'default'; track.src=captions[0].url; track.default=true; video.appendChild(track); video.textTracks[0].mode='showing'; }
             }
-        } catch(e) {
-            log('Failed to load episode: ' + e.message);
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = 'Error: ' + e.message;
-            }
-        }
-    }
-
-    async function loadStreamWithMP4(se, ep, stream) {
-        const container = document.getElementById('tvPlayerContainer');
-        const errorDiv = document.getElementById('tvPlayerError');
-        const video = document.getElementById('tvVideoElement');
-        if (!video) return;
-
-        const proxyUrl = getProxyStreamUrl(se, ep, 'mp4');
-        log('Using MP4: ' + proxyUrl);
-        video.src = proxyUrl;
-        container.style.display = 'block';
-        video.play().catch(() => {});
-        tvVideoElement = video;
-
-        video.onerror = () => {
-            const err = video.error;
-            const msgs = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
-            const msg = msgs[err?.code] || 'Unknown';
-            log(`MP4 error: ${msg}`);
-            if (errorDiv) {
-                errorDiv.style.display = 'block';
-                errorDiv.textContent = `MP4 playback failed (${msg}). The stream may not be available.`;
-            }
-        };
+        } catch(e) { log('Load episode error: '+e.message); if(errorDiv) { errorDiv.style.display='block'; errorDiv.textContent='Failed: '+e.message; } }
     }
 
     function handleHashChange() {
         const hash = window.location.hash;
         if (hash.startsWith('#/detail/')) {
             const slug = hash.replace('#/detail/', '');
-            (async () => {
+            (async() => {
                 try {
                     const detail = await fetchJSON('/detail/' + slug);
                     const subject = detail.data?.subject || detail.subject;
-                    if (subject && subject.subjectId) {
-                        loadDetail(slug, subject.subjectId);
-                    } else {
-                        detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Invalid movie slug.</div>';
-                        searchPage.classList.add('hidden');
-                        detailPage.classList.add('active');
-                    }
-                } catch(e) {
-                    detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error: ' + e.message + '</div>';
-                    searchPage.classList.add('hidden');
-                    detailPage.classList.add('active');
-                }
+                    if (subject && subject.subjectId) loadDetail(slug, subject.subjectId);
+                    else { searchPage.classList.add('hidden'); detailPage.classList.add('active'); detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Invalid slug</div>'; }
+                } catch(e) { detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error loading detail</div>'; }
             })();
-        } else {
-            searchPage.classList.remove('hidden');
-            detailPage.classList.remove('active');
-        }
+        } else { searchPage.classList.remove('hidden'); detailPage.classList.remove('active'); }
     }
 
     window.addEventListener('hashchange', handleHashChange);
-    backBtn.addEventListener('click', () => {
-        window.location.hash = '';
-    });
-
-    if (window.location.hash) {
-        handleHashChange();
-    }
-
+    backBtn.addEventListener('click', () => window.location.hash = '');
     searchBtn.addEventListener('click', () => doSearch(1));
-    searchInput.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter') doSearch(1);
-    });
+    searchInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') doSearch(1); });
 
-    window.onerror = function(m,s,l,c,e) { log('Unhandled error: ' + m + ' at ' + s + ':' + l); };
-    window.onunhandledrejection = function(e) { log('Unhandled rejection: ' + e.reason); };
-    log('Ready. Share URLs like #/detail/slug');
+    window.onerror = function(m,s,l,c,e) { log('Unhandled: '+m); };
+    if (window.location.hash) handleHashChange();
+    else loadCategory('popular');
+    log('🌟 Premium Stream ready. Categories loaded.');
 })();
 </script>
 </body>
