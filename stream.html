@@ -30,11 +30,6 @@
             font-weight: 700; text-shadow: 0 0 30px rgba(255,61,113,0.3);
             display: flex; align-items: center; gap: 0.5rem;
         }
-        .badge {
-            background: var(--card); border: 1px solid var(--border); border-radius: 30px;
-            padding: 0.25rem 0.8rem; font-size: 0.75rem; color: var(--muted); font-weight: 500;
-            letter-spacing: 0.3px; display: inline-flex; align-items: center; gap: 0.3rem;
-        }
         .config {
             background: var(--card); padding: 0.6rem 1rem; border-radius: 40px;
             border: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.5rem;
@@ -46,7 +41,7 @@
             font-size: 0.9rem; outline: none; transition: 0.2s;
         }
         .config input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,61,113,0.15); }
-        .config button, .search-bar button, .category-bar button {
+        .config button, .search-bar button {
             padding: 0.6rem 1.5rem; border-radius: 30px; background: var(--accent);
             color: #fff; border: none; font-weight: 600; cursor: pointer; transition: 0.2s;
             letter-spacing: 0.3px; border: 1px solid transparent;
@@ -133,8 +128,6 @@
             border: 1px solid var(--border); border-radius: 30px; min-width: 140px;
             font-weight: 500; cursor: pointer; outline: none;
         }
-        .stream-links a { display: inline-block; margin: 0.3rem 0.5rem 0.3rem 0; padding: 0.5rem 1rem; background: var(--accent); color: #fff; border-radius: 30px; text-decoration: none; font-size: 0.8rem; }
-        .loading-text { color: var(--muted); text-align: center; padding: 2rem; font-style: italic; }
         .quality-selector { display: flex; align-items: center; gap: 0.7rem; margin: 1rem 0; justify-content: center; }
         .quality-selector select {
             padding: 0.5rem 1.2rem; background: #171c24; color: var(--text);
@@ -160,16 +153,12 @@
             background: #161b23; padding: 2rem; border-radius: 30px; width: 90%;
             max-width: 420px; border: 1px solid #2a2f3a; box-shadow: 0 30px 50px rgba(0,0,0,0.7);
         }
-        .edit-modal-content h3 { margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 600; }
-        .edit-modal-content input, .edit-modal-content textarea {
-            width: 100%; padding: 0.8rem 1rem; margin-bottom: 1rem; background: #0e1117;
-            border: 1px solid #2a2f3a; border-radius: 15px; color: var(--text); font-size: 0.9rem;
-        }
         .edit-modal-actions { display: flex; gap: 0.8rem; justify-content: flex-end; margin-top: 1rem; }
-        .save-btn { background: var(--accent); color: #fff; padding: 0.8rem 1.8rem; border-radius: 30px; border: none; font-weight: 600; }
-        .cancel-btn { background: #2a2f3a; color: var(--text); padding: 0.8rem 1.8rem; border-radius: 30px; border: none; }
-        .section-title { font-size: 1.6rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-        .caption-badge { background: var(--accent2); padding: 0.2rem 0.7rem; border-radius: 20px; font-size: 0.7rem; color: white; }
+        .save-btn, .cancel-btn { padding: 0.8rem 1.8rem; border-radius: 30px; border: none; font-weight: 600; cursor: pointer; }
+        .save-btn { background: var(--accent); color: #fff; }
+        .cancel-btn { background: #2a2f3a; color: var(--text); }
+        .section-title { font-size: 1.6rem; font-weight: 600; margin-bottom: 1rem; }
+        .loading-text { color: var(--muted); text-align: center; padding: 2rem; font-style: italic; }
     </style>
 </head>
 <body>
@@ -250,14 +239,21 @@
     let searchResults = [];
     let availableCaptions = [];
 
-    function log(msg) { statusDiv.textContent += '\n' + msg; console.log(msg); }
+    function log(msg) { 
+        statusDiv.textContent += '\n' + msg; 
+        console.log(msg); 
+    }
+
     function getApiBase() { return apiBaseInput.value.replace(/\/+$/, ''); }
 
     async function fetchJSON(path) {
         const url = getApiBase() + path;
         try {
             const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`HTTP ${res.status}: ${text.substring(0, 100)}`);
+            }
             return await res.json();
         } catch(e) {
             log('Fetch error: ' + e.message);
@@ -266,62 +262,175 @@
     }
 
     window.testConnection = async function() {
-        try { await fetchJSON('/home'); log('✅ Connection successful!'); }
+        try { 
+            await fetchJSON('/home'); 
+            log('✅ Connection successful!'); 
+        }
         catch(e) { log('❌ Connection failed: ' + e.message); }
     };
 
-    function getCategoryPath(cat) {
-        const map = {
-            popular: '/popular', trending: '/trending', latest: '/latest',
-            tagalog: '/tagalog', tagalog_dubbed: '/tagalog-dubbed', short_films: '/short-films'
-        };
-        return map[cat] || '/popular';
+    // Category configurations with multiple possible endpoints
+    const categoryConfig = {
+        popular: [
+            '/popular', '/api/popular', '/popular/movies', '/movies/popular',
+            '/trending', '/api/trending', '/featured', '/api/featured'
+        ],
+        trending: [
+            '/trending', '/api/trending', '/trending/movies', '/movies/trending',
+            '/popular', '/api/popular', '/hot', '/api/hot'
+        ],
+        latest: [
+            '/latest', '/api/latest', '/new', '/api/new', '/recent', '/api/recent',
+            '/latest/movies', '/movies/latest'
+        ],
+        tagalog: [
+            '/tagalog', '/api/tagalog', '/tagalog/movies', '/movies/tagalog',
+            '/filipino', '/api/filipino', '/philippines', '/api/philippines'
+        ],
+        tagalog_dubbed: [
+            '/tagalog-dubbed', '/api/tagalog-dubbed', '/dubbed', '/api/dubbed',
+            '/tagalog-dub', '/api/tagalog-dub', '/tagalog/dubbed'
+        ],
+        short_films: [
+            '/short-films', '/api/short-films', '/shorts', '/api/shorts',
+            '/shortfilms', '/api/shortfilms', '/films/short'
+        ]
+    };
+
+    async function tryMultipleEndpoints(endpoints, page = 1) {
+        for (const endpoint of endpoints) {
+            try {
+                const path = endpoint + (endpoint.includes('?') ? '&' : '?') + 'page=' + page;
+                const data = await fetchJSON(path);
+                if (data && (data.items || data.results || data.data)) {
+                    log(`✓ Endpoint works: ${endpoint}`);
+                    return normalizeData(data);
+                }
+            } catch(e) {
+                // Continue to next endpoint
+            }
+        }
+        throw new Error('No working endpoint found for category');
+    }
+
+    function normalizeData(data) {
+        // Handle different API response formats
+        if (data.items) return data;
+        if (data.results) return { items: data.results, total_pages: data.total_pages || 1 };
+        if (data.data && Array.isArray(data.data)) return { items: data.data, total_pages: data.total_pages || 1 };
+        if (Array.isArray(data)) return { items: data, total_pages: 1 };
+        return { items: [], total_pages: 1 };
     }
 
     async function loadCategory(cat, page = 1) {
         activeCategory = cat;
-        if (page === 1) { currentPage = 1; searchResults = []; resultsGrid.innerHTML = ''; loadingDiv.style.display = 'block'; }
+        if (page === 1) { 
+            currentPage = 1; 
+            searchResults = []; 
+            resultsGrid.innerHTML = ''; 
+            loadingDiv.style.display = 'block'; 
+            loadingDiv.textContent = `⏳ Loading ${cat}...`;
+        }
         isLoading = true;
+        
         try {
-            const data = await fetchJSON(getCategoryPath(cat) + '?page=' + page);
+            let data;
+            if (categoryConfig[cat]) {
+                data = await tryMultipleEndpoints(categoryConfig[cat], page);
+            } else {
+                // Fallback to search with category name
+                data = await fetchJSON('/search?q=' + encodeURIComponent(cat.replace('_', ' ')) + '&page=' + page);
+                data = normalizeData(data);
+            }
+            
             const items = data.items || [];
             totalPages = data.total_pages || 1;
-            if (page === 1) searchResults = items; else searchResults = [...searchResults, ...items];
+            if (page === 1) searchResults = items; 
+            else searchResults = [...searchResults, ...items];
+            
             renderResults(searchResults);
+            log(`✅ Loaded ${items.length} items from ${cat} (page ${page}/${totalPages})`);
         } catch(e) {
-            log('Category error: ' + e.message);
-            if (page === 1) resultsGrid.innerHTML = '<div style="color:#ff6b6b;">Category load failed</div>';
+            log('❌ Category error: ' + e.message);
+            if (page === 1) {
+                resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1; text-align:center; padding:2rem;">Category load failed. Trying search fallback...</div>';
+                // Fallback to search
+                try {
+                    const fallbackData = await fetchJSON('/search?q=' + encodeURIComponent(cat.replace('_', ' ')) + '&page=1');
+                    const normalized = normalizeData(fallbackData);
+                    searchResults = normalized.items || [];
+                    renderResults(searchResults);
+                } catch(fallbackError) {
+                    resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1; text-align:center; padding:2rem;">Unable to load category. Please check API connection.</div>';
+                }
+            }
         }
-        isLoading = false; loadingDiv.style.display = 'none';
+        
+        isLoading = false; 
+        loadingDiv.style.display = 'none';
         hasMoreResults = currentPage < totalPages;
     }
 
     async function doSearch(page = 1) {
         const q = searchInput.value.trim();
         if(!q) return;
-        if (page === 1) { currentPage = 1; currentSearchQuery = q; resultsGrid.innerHTML = ''; searchResults = []; loadingDiv.style.display = 'block'; }
+        
+        if (page === 1) { 
+            currentPage = 1; 
+            currentSearchQuery = q; 
+            resultsGrid.innerHTML = ''; 
+            searchResults = []; 
+            loadingDiv.style.display = 'block'; 
+            loadingDiv.textContent = '🔍 Searching...';
+        }
+        
         isLoading = true;
         try {
             const data = await fetchJSON('/search?q=' + encodeURIComponent(q) + '&page=' + page);
-            const items = data.items || [];
-            totalPages = data.total_pages || 1;
-            if (page === 1) searchResults = items; else searchResults = [...searchResults, ...items];
+            const normalized = normalizeData(data);
+            const items = normalized.items || [];
+            totalPages = normalized.total_pages || 1;
+            
+            if (page === 1) searchResults = items; 
+            else searchResults = [...searchResults, ...items];
+            
             renderResults(searchResults);
-        } catch(e) { log('Search error: ' + e.message); }
-        isLoading = false; loadingDiv.style.display = 'none';
+            log(`✅ Search found ${items.length} results`);
+        } catch(e) { 
+            log('❌ Search error: ' + e.message); 
+            if (page === 1) {
+                resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1; text-align:center;">Search failed</div>';
+            }
+        }
+        
+        isLoading = false; 
+        loadingDiv.style.display = 'none';
         hasMoreResults = currentPage < totalPages;
     }
 
     function renderResults(items) {
-        if(!items.length) { resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">✨ Nothing found</div>'; return; }
+        if(!items || !items.length) { 
+            resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1; text-align:center; padding:2rem;">✨ No content found</div>'; 
+            return; 
+        }
+        
         resultsGrid.innerHTML = items.map((item, index) => {
-            const poster = item.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster';
-            return `<div class="movie-card" data-index="${index}" data-slug="${item.slug||''}" data-subjectid="${item.subject_id||''}">
-                <img src="${poster}" alt="${item.name||''}">
+            const poster = item.poster_url || item.poster || item.image || 'https://via.placeholder.com/200x300?text=No+Poster';
+            const title = item.name || item.title || 'Untitled';
+            const year = item.year || item.releaseDate || '';
+            const rating = item.rating || item.imdbRatingValue || '';
+            const slug = item.slug || item.id || '';
+            const subjectId = item.subject_id || item.subjectId || item.id || '';
+            
+            return `<div class="movie-card" data-index="${index}" data-slug="${slug}" data-subjectid="${subjectId}">
+                <img src="${poster}" alt="${title}" onerror="this.src='https://via.placeholder.com/200x300?text=No+Poster'">
                 <button class="edit-btn" onclick="event.stopPropagation(); openEditModal(${index})">✏️ Edit</button>
                 <div class="info">
-                    <div class="title">${item.name||'Untitled'}</div>
-                    <div class="meta"><span>${item.year||'—'}</span> ${item.rating?'<span>⭐ '+item.rating+'</span>':''}</div>
+                    <div class="title">${title}</div>
+                    <div class="meta">
+                        <span>${year || '—'}</span>
+                        ${rating ? '<span>⭐ ' + rating + '</span>' : ''}
+                    </div>
                 </div>
             </div>`;
         }).join('');
@@ -331,57 +440,76 @@
         if (e.target.classList.contains('edit-btn')) return;
         const card = e.target.closest('.movie-card');
         if(!card) return;
-        const slug = card.dataset.slug, subjectId = card.dataset.subjectid;
+        const slug = card.dataset.slug;
+        const subjectId = card.dataset.subjectid;
         if(slug && subjectId) navigateToDetail(slug, subjectId);
     });
 
+    // Infinite scroll
     window.addEventListener('scroll', () => {
-        if (isLoading || !hasMoreResults || !searchPage.classList.contains('hidden')) return;
+        if (isLoading || !hasMoreResults || searchPage.classList.contains('hidden')) return;
         const scrollPosition = window.innerHeight + window.scrollY;
         const pageHeight = document.documentElement.offsetHeight;
         if (scrollPosition >= pageHeight - 300) {
-            if (currentSearchQuery.trim()) loadMoreSearch(); else loadMoreCategory();
+            currentPage++;
+            if (currentSearchQuery.trim()) {
+                doSearch(currentPage);
+            } else {
+                loadCategory(activeCategory, currentPage);
+            }
         }
     });
 
-    async function loadMoreSearch() { if (currentPage < totalPages) { currentPage++; await doSearch(currentPage); } }
-    async function loadMoreCategory() { if (currentPage < totalPages) { currentPage++; await loadCategory(activeCategory, currentPage); } }
-
+    // Category bar click handler
     categoryBar.addEventListener('click', (e) => {
         const btn = e.target.closest('.category-btn');
         if(!btn) return;
         document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        currentSearchQuery = ''; // Clear search when switching categories
         loadCategory(btn.dataset.cat);
     });
 
     window.openEditModal = function(index) {
-        editingCardIndex = index; const item = searchResults[index];
-        document.getElementById('editName').value = item.name || '';
-        document.getElementById('editYear').value = item.year || '';
+        editingCardIndex = index; 
+        const item = searchResults[index];
+        if(!item) return;
+        document.getElementById('editName').value = item.name || item.title || '';
+        document.getElementById('editYear').value = item.year || item.releaseDate || '';
         document.getElementById('editRating').value = item.rating || '';
-        document.getElementById('editPoster').value = item.poster_url || '';
+        document.getElementById('editPoster').value = item.poster_url || item.poster || '';
         editModal.classList.add('active');
     };
-    window.closeEditModal = function() { editModal.classList.remove('active'); editingCardIndex = null; };
+    
+    window.closeEditModal = function() { 
+        editModal.classList.remove('active'); 
+        editingCardIndex = null; 
+    };
+    
     window.saveEdit = function() {
         if (editingCardIndex === null) return;
         const item = searchResults[editingCardIndex];
+        if(!item) return;
         item.name = document.getElementById('editName').value;
         item.year = document.getElementById('editYear').value;
         item.rating = document.getElementById('editRating').value;
         item.poster_url = document.getElementById('editPoster').value;
         renderResults(searchResults);
         closeEditModal();
-        log('Result updated');
+        log('✅ Result updated');
     };
 
-    function navigateToDetail(slug, subjectId) { window.location.hash = `#/detail/${slug}`; }
+    function navigateToDetail(slug, subjectId) { 
+        window.location.hash = `#/detail/${slug}`; 
+    }
 
     async function loadDetail(slug, subjectId) {
-        currentSubjectId = subjectId; currentSlug = slug;
-        searchPage.classList.add('hidden'); detailPage.classList.add('active');
+        currentSubjectId = subjectId; 
+        currentSlug = slug;
+        searchPage.classList.add('hidden'); 
+        detailPage.classList.add('active');
         detailContentDiv.innerHTML = '<div class="loading-text">⏳ Loading premium detail...</div>';
+        
         try {
             const detail = await fetchJSON('/detail/' + slug);
             const stream = await fetchJSON('/api/stream/' + subjectId + '?detail_path=' + slug);
@@ -389,7 +517,8 @@
             availableCaptions = [];
             renderDetailPage(currentDetailData, stream);
         } catch(e) {
-            detailContentDiv.innerHTML = `<div style="color:#ff6b6b;">Error: ${e.message}</div>`;
+            detailContentDiv.innerHTML = `<div style="color:#ff6b6b; padding:2rem;">Error: ${e.message}</div>`;
+            log('❌ Detail error: ' + e.message);
         }
     }
 
@@ -399,19 +528,27 @@
         return url;
     }
 
-    async function fetchCaptions(se, ep) {
+    async function fetchCaptions(se = 0, ep = 0) {
         try {
             const data = await fetchJSON(`/api/stream/${currentSubjectId}/captions?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
             availableCaptions = data.captions || [];
             return availableCaptions;
-        } catch(e) { log('caption fetch failed'); return []; }
+        } catch(e) { 
+            log('Caption fetch failed'); 
+            return []; 
+        }
     }
 
     function renderCaptionSelector() {
         const container = document.getElementById('captionSelectorContainer');
         if(!container) return;
-        container.innerHTML = '';
-        if(availableCaptions.length === 0) { container.innerHTML = '<span style="color:var(--muted)">No subtitles available</span>'; return; }
+        container.innerHTML = '<span>📝 Subtitles: </span>';
+        
+        if(availableCaptions.length === 0) { 
+            container.innerHTML += '<span style="color:var(--muted)">None available</span>'; 
+            return; 
+        }
+        
         availableCaptions.forEach((cap, i) => {
             const btn = document.createElement('button');
             btn.className = 'caption-track-btn' + (i === 0 ? ' active' : '');
@@ -421,13 +558,15 @@
                 btn.classList.add('active');
                 const video = document.getElementById('tvVideoElement') || document.getElementById('dashVideoElement');
                 if(video) {
-                    // remove old tracks
-                    const oldTracks = video.querySelectorAll('track');
-                    oldTracks.forEach(t => t.remove());
+                    // Remove old tracks
+                    video.querySelectorAll('track').forEach(t => t.remove());
                     const track = document.createElement('track');
-                    track.kind = 'subtitles'; track.label = cap.language || 'default'; track.src = cap.url; track.default = true;
+                    track.kind = 'subtitles'; 
+                    track.label = cap.language || 'default'; 
+                    track.src = cap.url; 
+                    track.default = true;
                     video.appendChild(track);
-                    video.textTracks[0].mode = 'showing';
+                    if(video.textTracks[0]) video.textTracks[0].mode = 'showing';
                 }
             };
             container.appendChild(btn);
@@ -436,17 +575,23 @@
 
     function renderDetailPage(detail, stream) {
         if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
-        if (tvVideoElement) { tvVideoElement.pause(); tvVideoElement.removeAttribute('src'); tvVideoElement.load(); tvVideoElement = null; }
+        if (tvVideoElement) { 
+            tvVideoElement.pause(); 
+            tvVideoElement.removeAttribute('src'); 
+            tvVideoElement.load(); 
+            tvVideoElement = null; 
+        }
 
-        const title = detail.subject?.title || detail.title || 'Unknown';
+        const title = detail.subject?.title || detail.title || detail.name || 'Unknown';
         const year = (detail.subject?.releaseDate || detail.releaseDate || '').slice(0,4);
-        const rating = detail.subject?.imdbRatingValue || '';
-        const desc = detail.subject?.description || '';
+        const rating = detail.subject?.imdbRatingValue || detail.imdbRatingValue || '';
+        const desc = detail.subject?.description || detail.description || '';
 
-        let html = `<div style="display:flex; flex-wrap:wrap; gap:1.5rem; align-items:flex-start;">`;
-        html += `<div style="flex:1; min-width:280px;"><h2 style="font-size:2rem;">${title} <span style="color:var(--muted)">(${year})</span></h2>`;
-        html += `<div style="display:flex; gap:1rem; margin:0.5rem 0;"><span>⭐ ${rating||'—'}</span></div>`;
-        if(desc) html += `<p style="color:var(--muted);">${desc}</p>`;
+        let html = `<div style="max-width:800px; margin:auto;">`;
+        html += `<h2 style="font-size:2.5rem; margin-bottom:0.5rem;">${title} <span style="color:var(--muted); font-size:1.5rem;">(${year})</span></h2>`;
+        html += `<div style="display:flex; gap:1rem; margin:0.5rem 0; color:var(--gold);">${rating ? '⭐ ' + rating : ''}</div>`;
+        if(desc) html += `<p style="color:var(--muted); margin:1rem 0;">${desc}</p>`;
+        
         html += `<div class="quality-selector"><span>⚙️ Quality:</span><select id="qualitySelect">
             <option value="360p" ${selectedQuality==='360p'?'selected':''}>360p</option>
             <option value="480p" ${selectedQuality==='480p'?'selected':''}>480p</option>
@@ -459,7 +604,7 @@
                 html += `<div id="dashPlayerContainer" class="movie-player-container" style="display:none;"><video id="dashVideoElement" controls></video></div>`;
                 html += `<button id="playDashBtn" class="play-direct-btn">▶ Play Movie (Ad‑Free)</button>`;
             } else {
-                html += `<div class="unavailable-msg">🚫 Stream not available</div>`;
+                html += `<div class="unavailable-msg">🚫 Stream not available for this title</div>`;
             }
         }
 
@@ -474,11 +619,14 @@
             html += `<div id="tvPlayerContainer" class="movie-player-container" style="display:none;"><video id="tvVideoElement" controls></video></div>`;
             html += `<div id="tvPlayerError" class="error-msg"></div>`;
         }
-        html += `<div id="captionSelectorContainer" class="caption-track-selector"><span>📝 Subtitles: </span></div>`;
+        
+        html += `<div id="captionSelectorContainer" class="caption-track-selector"></div>`;
         html += `<div id="streamContainer">${buildStreamLinks(stream)}</div>`;
-        html += '</div></div>';
+        html += '</div>';
+        
         detailContentDiv.innerHTML = html;
 
+        // Quality selector
         document.getElementById('qualitySelect').addEventListener('change', (e) => {
             selectedQuality = e.target.value;
             if (stream.detected_type === 'movie' && dashPlayer) {
@@ -491,6 +639,7 @@
             }
         });
 
+        // Movie play button
         if (stream.detected_type === 'movie' && stream.has_resource) {
             document.getElementById('playDashBtn').addEventListener('click', async () => {
                 const container = document.getElementById('dashPlayerContainer');
@@ -501,46 +650,73 @@
                 }
                 container.style.display = 'block';
                 video.play();
-                await fetchCaptions(0,0);
+                await fetchCaptions(0, 0);
                 renderCaptionSelector();
             });
         }
 
+        // TV episode handlers
         if (stream.detected_type === 'tv' && detail.resource?.seasons) {
             const seasonSelect = document.getElementById('seasonSelect');
             const episodeSelect = document.getElementById('episodeSelect');
             const seasons = detail.resource.seasons;
+            
             seasonSelect.addEventListener('change', () => {
                 const selSeason = parseInt(seasonSelect.value);
                 const obj = seasons.find(s => s.se === selSeason);
-                if(obj) { episodeSelect.innerHTML = ''; for(let ep=1; ep<=obj.maxEp; ep++) episodeSelect.innerHTML += `<option value="${ep}">Ep ${ep}</option>`; loadStreamForEpisode(selSeason, 1); }
+                if(obj) { 
+                    episodeSelect.innerHTML = ''; 
+                    for(let ep=1; ep<=obj.maxEp; ep++) {
+                        episodeSelect.innerHTML += `<option value="${ep}">Ep ${ep}</option>`;
+                    }
+                    loadStreamForEpisode(selSeason, 1); 
+                }
             });
-            episodeSelect.addEventListener('change', () => loadStreamForEpisode(parseInt(seasonSelect.value), parseInt(episodeSelect.value)));
+            
+            episodeSelect.addEventListener('change', () => {
+                loadStreamForEpisode(parseInt(seasonSelect.value), parseInt(episodeSelect.value));
+            });
+            
             loadStreamForEpisode(parseInt(seasonSelect.value), parseInt(episodeSelect.value));
         }
     }
 
     function buildStreamLinks(stream) {
-        let html = '<div class="stream-links"><strong>🌐 Sources:</strong> ';
-        if(stream.sources?.length) stream.sources.forEach(s => html += `<span style="background:#28a745;padding:0.3rem 0.8rem;border-radius:20px;font-size:0.8rem;">${s.resolution}</span> `);
-        if(stream.dash?.length) html += '<span style="background:#3366ff;padding:0.3rem 0.8rem;border-radius:20px;font-size:0.8rem;">DASH</span> ';
-        if(!stream.has_resource) html += '<span>none</span>';
-        html += '</div>'; return html;
+        let html = '<div style="margin-top:1rem;"><strong>🌐 Available sources:</strong> ';
+        if(stream.sources?.length) {
+            stream.sources.forEach(s => {
+                html += `<span style="background:#28a745;padding:0.3rem 0.8rem;border-radius:20px;font-size:0.8rem;margin:0 0.2rem;">${s.resolution || 'MP4'}</span>`;
+            });
+        }
+        if(stream.dash?.length) {
+            html += '<span style="background:#3366ff;padding:0.3rem 0.8rem;border-radius:20px;font-size:0.8rem;margin:0 0.2rem;">DASH</span>';
+        }
+        if(!stream.has_resource) html += '<span style="color:var(--muted);">none</span>';
+        html += '</div>'; 
+        return html;
     }
 
     async function loadStreamForEpisode(se, ep) {
         const container = document.getElementById('tvPlayerContainer');
         const errorDiv = document.getElementById('tvPlayerError');
         let video = document.getElementById('tvVideoElement');
+        
         if(!container || !video) return;
         if(dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
+        
         container.style.display = 'none';
         if(errorDiv) errorDiv.style.display = 'none';
+        
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
-            const captions = await fetchCaptions(se, ep);
+            await fetchCaptions(se, ep);
             renderCaptionSelector();
-            if (!stream.has_resource) { log('No stream for episode'); return; }
+            
+            if (!stream.has_resource) { 
+                log('No stream for episode'); 
+                return; 
+            }
+            
             if (stream.dash?.length) {
                 const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
                 dashPlayer = dashjs.MediaPlayer().create();
@@ -548,18 +724,39 @@
                 container.style.display = 'block';
                 tvVideoElement = video;
                 video.play().catch(()=>{});
-                if(captions.length) {
-                    const track = document.createElement('track'); track.kind='subtitles'; track.label=captions[0].language||'default'; track.src=captions[0].url; track.default=true;
-                    video.appendChild(track); video.textTracks[0].mode='showing';
+                
+                if(availableCaptions.length) {
+                    const track = document.createElement('track'); 
+                    track.kind='subtitles'; 
+                    track.label=availableCaptions[0].language || 'default'; 
+                    track.src=availableCaptions[0].url; 
+                    track.default=true;
+                    video.appendChild(track); 
+                    if(video.textTracks[0]) video.textTracks[0].mode='showing';
                 }
             } else if (stream.sources?.length) {
                 video.src = getProxyStreamUrl(se, ep, 'mp4');
                 container.style.display = 'block';
                 tvVideoElement = video;
                 video.play().catch(()=>{});
-                if(captions.length) { const track = document.createElement('track'); track.kind='subtitles'; track.label=captions[0].language||'default'; track.src=captions[0].url; track.default=true; video.appendChild(track); video.textTracks[0].mode='showing'; }
+                
+                if(availableCaptions.length) { 
+                    const track = document.createElement('track'); 
+                    track.kind='subtitles'; 
+                    track.label=availableCaptions[0].language || 'default'; 
+                    track.src=availableCaptions[0].url; 
+                    track.default=true; 
+                    video.appendChild(track); 
+                    if(video.textTracks[0]) video.textTracks[0].mode='showing';
+                }
             }
-        } catch(e) { log('Load episode error: '+e.message); if(errorDiv) { errorDiv.style.display='block'; errorDiv.textContent='Failed: '+e.message; } }
+        } catch(e) { 
+            log('Load episode error: '+e.message); 
+            if(errorDiv) { 
+                errorDiv.style.display='block'; 
+                errorDiv.textContent='Failed: '+e.message; 
+            }
+        }
     }
 
     function handleHashChange() {
@@ -570,11 +767,21 @@
                 try {
                     const detail = await fetchJSON('/detail/' + slug);
                     const subject = detail.data?.subject || detail.subject;
-                    if (subject && subject.subjectId) loadDetail(slug, subject.subjectId);
-                    else { searchPage.classList.add('hidden'); detailPage.classList.add('active'); detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Invalid slug</div>'; }
-                } catch(e) { detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error loading detail</div>'; }
+                    if (subject && subject.subjectId) {
+                        loadDetail(slug, subject.subjectId);
+                    } else {
+                        searchPage.classList.add('hidden'); 
+                        detailPage.classList.add('active'); 
+                        detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Invalid slug</div>';
+                    }
+                } catch(e) { 
+                    detailContentDiv.innerHTML = '<div style="color:#ff6b6b;">Error loading detail</div>'; 
+                }
             })();
-        } else { searchPage.classList.remove('hidden'); detailPage.classList.remove('active'); }
+        } else { 
+            searchPage.classList.remove('hidden'); 
+            detailPage.classList.remove('active'); 
+        }
     }
 
     window.addEventListener('hashchange', handleHashChange);
@@ -582,9 +789,17 @@
     searchBtn.addEventListener('click', () => doSearch(1));
     searchInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') doSearch(1); });
 
-    window.onerror = function(m,s,l,c,e) { log('Unhandled: '+m); };
-    if (window.location.hash) handleHashChange();
-    else loadCategory('popular');
+    window.onerror = function(m,s,l,c,e) { 
+        log('Unhandled: '+m); 
+    };
+    
+    // Initialize
+    if (window.location.hash) {
+        handleHashChange();
+    } else {
+        loadCategory('popular');
+    }
+    
     log('🌟 Premium Stream ready. Categories loaded.');
 })();
 </script>
