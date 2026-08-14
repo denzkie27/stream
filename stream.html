@@ -59,6 +59,58 @@
         .quality-selector { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
         .quality-selector select { padding: 0.4rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
         .error-msg { color: #ff6b6b; margin-top: 0.5rem; }
+        .edit-btn { 
+            background: var(--card); 
+            border: 1px solid var(--border); 
+            color: var(--muted); 
+            padding: 0.3rem 0.6rem; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 0.7rem;
+            margin-top: 0.3rem;
+            transition: 0.2s;
+        }
+        .edit-btn:hover { color: var(--accent); border-color: var(--accent); }
+        .edit-modal {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .edit-modal.active { display: flex; }
+        .edit-modal-content {
+            background: var(--card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid var(--border);
+        }
+        .edit-modal-content h3 { margin-bottom: 1rem; }
+        .edit-modal-content input, .edit-modal-content textarea {
+            width: 100%;
+            padding: 0.6rem;
+            margin-bottom: 1rem;
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+        }
+        .edit-modal-content textarea { min-height: 100px; resize: vertical; }
+        .edit-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+        .edit-modal-actions button {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .save-btn { background: var(--accent); color: #fff; }
+        .cancel-btn { background: var(--border); color: var(--text); }
     </style>
 </head>
 <body>
@@ -84,6 +136,25 @@
     </div>
 </div>
 
+<!-- Edit Modal -->
+<div id="editModal" class="edit-modal">
+    <div class="edit-modal-content">
+        <h3>Edit Result</h3>
+        <label for="editName">Name:</label>
+        <input type="text" id="editName" placeholder="Title">
+        <label for="editYear">Year:</label>
+        <input type="text" id="editYear" placeholder="Year">
+        <label for="editRating">Rating:</label>
+        <input type="text" id="editRating" placeholder="Rating">
+        <label for="editPoster">Poster URL:</label>
+        <input type="text" id="editPoster" placeholder="Poster URL">
+        <div class="edit-modal-actions">
+            <button class="cancel-btn" onclick="closeEditModal()">Cancel</button>
+            <button class="save-btn" onclick="saveEdit()">Save</button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function() {
     const apiBaseInput = document.getElementById('apiBase');
@@ -96,6 +167,7 @@
     const detailPage = document.getElementById('detailPage');
     const detailContentDiv = document.getElementById('detailContent');
     const backBtn = document.getElementById('backBtn');
+    const editModal = document.getElementById('editModal');
 
     let currentSubjectId = null;
     let currentSlug = null;
@@ -103,6 +175,15 @@
     let dashPlayer = null;
     let tvVideoElement = null;
     let selectedQuality = '480p';
+    
+    // Infinite scroll variables
+    let currentPage = 1;
+    let totalPages = 1;
+    let isLoading = false;
+    let hasMoreResults = false;
+    let currentSearchQuery = '';
+    let editingCardIndex = null;
+    let searchResults = [];
 
     function log(msg) {
         statusDiv.textContent += '\n' + msg;
@@ -133,22 +214,48 @@
         }
     };
 
-    async function doSearch() {
+    async function doSearch(page = 1) {
         const q = searchInput.value.trim();
         if(!q) return;
-        loadingDiv.style.display = 'block';
-        resultsGrid.innerHTML = '';
-        log('Searching: ' + q);
+        
+        if (page === 1) {
+            currentPage = 1;
+            currentSearchQuery = q;
+            resultsGrid.innerHTML = '';
+            searchResults = [];
+            loadingDiv.style.display = 'block';
+            log('Searching: ' + q);
+        }
+        
+        isLoading = true;
+        
         try {
-            const data = await fetchJSON('/search?q=' + encodeURIComponent(q));
+            const data = await fetchJSON('/search?q=' + encodeURIComponent(q) + '&page=' + page);
             const items = data.items || [];
-            log('Found ' + items.length + ' results.');
-            renderResults(items);
+            
+            if (page === 1) {
+                log('Found ' + items.length + ' results.');
+                totalPages = data.total_pages || Math.ceil(items.length / 10);
+                hasMoreResults = page < totalPages;
+            }
+            
+            searchResults = [...searchResults, ...items];
+            renderResults(searchResults);
+            
+            if (items.length === 0 && page === 1) {
+                resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">Nothing found</div>';
+            }
         } catch(e) {
             log('Search error: ' + e.message);
-            resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1;">Search failed</div>';
+            if (page === 1) {
+                resultsGrid.innerHTML = '<div style="color:#ff6b6b; grid-column:1/-1;">Search failed</div>';
+            }
         }
-        loadingDiv.style.display = 'none';
+        
+        isLoading = false;
+        if (page === 1) {
+            loadingDiv.style.display = 'none';
+        }
     }
 
     function renderResults(items) {
@@ -156,19 +263,23 @@
             resultsGrid.innerHTML = '<div style="color:var(--muted); grid-column:1/-1;">Nothing found</div>';
             return;
         }
-        resultsGrid.innerHTML = items.map((item) => {
+        
+        resultsGrid.innerHTML = items.map((item, index) => {
             const poster = item.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster';
-            return `<div class="movie-card" data-slug="${item.slug||''}" data-subjectid="${item.subject_id||''}">
+            return `<div class="movie-card" data-index="${index}" data-slug="${item.slug||''}" data-subjectid="${item.subject_id||''}">
                 <img src="${poster}" alt="${item.name||''}">
                 <div class="info">
                     <div class="title">${item.name||'Untitled'}</div>
                     <div style="font-size:0.75rem; color:var(--muted);">${item.year||''} ${item.rating?'⭐'+item.rating:''}</div>
+                    <button class="edit-btn" onclick="event.stopPropagation(); openEditModal(${index})">✏️ Edit</button>
                 </div>
             </div>`;
         }).join('');
     }
 
     resultsGrid.addEventListener('click', (e) => {
+        if (e.target.classList.contains('edit-btn')) return;
+        
         const card = e.target.closest('.movie-card');
         if(!card) return;
         const slug = card.dataset.slug;
@@ -176,6 +287,61 @@
         if(!slug || !subjectId) { log('Missing slug or ID.'); return; }
         navigateToDetail(slug, subjectId);
     });
+
+    // Infinite scroll implementation
+    window.addEventListener('scroll', () => {
+        if (isLoading || !hasMoreResults) return;
+        
+        const scrollPosition = window.innerHeight + window.scrollY;
+        const pageHeight = document.documentElement.offsetHeight;
+        
+        // Load more when user is near the bottom (within 200px)
+        if (scrollPosition >= pageHeight - 200) {
+            loadMoreResults();
+        }
+    });
+
+    async function loadMoreResults() {
+        if (currentPage >= totalPages) {
+            hasMoreResults = false;
+            return;
+        }
+        
+        currentPage++;
+        await doSearch(currentPage);
+    }
+
+    // Edit functionality
+    window.openEditModal = function(index) {
+        editingCardIndex = index;
+        const item = searchResults[index];
+        
+        document.getElementById('editName').value = item.name || '';
+        document.getElementById('editYear').value = item.year || '';
+        document.getElementById('editRating').value = item.rating || '';
+        document.getElementById('editPoster').value = item.poster_url || '';
+        
+        editModal.classList.add('active');
+    };
+
+    window.closeEditModal = function() {
+        editModal.classList.remove('active');
+        editingCardIndex = null;
+    };
+
+    window.saveEdit = function() {
+        if (editingCardIndex === null) return;
+        
+        const item = searchResults[editingCardIndex];
+        item.name = document.getElementById('editName').value;
+        item.year = document.getElementById('editYear').value;
+        item.rating = document.getElementById('editRating').value;
+        item.poster_url = document.getElementById('editPoster').value;
+        
+        renderResults(searchResults);
+        closeEditModal();
+        log('Result updated: ' + item.name);
+    };
 
     function navigateToDetail(slug, subjectId) {
         window.location.hash = `#/detail/${slug}`;
@@ -368,7 +534,6 @@
             video.pause();
             video.removeAttribute('src');
             video.load();
-            // clone to remove event listeners
             const newVideo = video.cloneNode(true);
             video.parentNode.replaceChild(newVideo, video);
             newVideo.id = 'tvVideoElement';
@@ -387,7 +552,6 @@
             return;
         }
 
-        // Reset everything
         resetPlayer();
         video = document.getElementById('tvVideoElement');
         container.style.display = 'none';
@@ -395,7 +559,6 @@
 
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
-            // Log full stream data for debugging
             log(`Stream data: hasResource=${stream.has_resource}, MP4 count=${stream.sources?.length||0}, DASH count=${stream.dash?.length||0}`);
             if (stream.dash?.length > 0) {
                 log(`First DASH url: ${stream.dash[0].url}`);
@@ -406,7 +569,6 @@
                 return;
             }
 
-            // Decide which format to use: prefer DASH, fallback to MP4
             if (stream.dash && stream.dash.length > 0) {
                 const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
                 log('Using DASH: ' + proxyUrl);
@@ -418,14 +580,12 @@
                         errorDiv.style.display = 'block';
                         errorDiv.textContent = 'DASH playback error. Trying MP4 fallback...';
                     }
-                    // Fallback to MP4
                     loadStreamWithMP4(se, ep, stream);
                 });
                 container.style.display = 'block';
                 video.play().catch(() => log('Autoplay blocked – press play'));
                 tvVideoElement = video;
             } else if (stream.sources && stream.sources.length > 0) {
-                // No DASH, use MP4 directly
                 loadStreamWithMP4(se, ep, stream);
             }
         } catch(e) {
@@ -498,9 +658,9 @@
         handleHashChange();
     }
 
-    searchBtn.addEventListener('click', doSearch);
+    searchBtn.addEventListener('click', () => doSearch(1));
     searchInput.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter') doSearch();
+        if(e.key === 'Enter') doSearch(1);
     });
 
     window.onerror = function(m,s,l,c,e) { log('Unhandled error: ' + m + ' at ' + s + ':' + l); };
