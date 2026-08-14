@@ -21,7 +21,7 @@
         .search-bar { display: flex; gap: 0.5rem; margin: 1rem 0; }
         .search-bar input { flex: 1; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
         .search-bar button { padding: 0.8rem 1.5rem; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-weight: bold; }
-        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
+        #status { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 0.7rem; margin: 0.8rem 0; font-size: 0.85rem; color: #ccc; white-space: pre-wrap; max-height: 250px; overflow-y: auto; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
         .movie-card { background: var(--card); border-radius: 14px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: 0.2s; }
         .movie-card:active { transform: scale(0.97); }
@@ -56,6 +56,9 @@
         .episode-selector select { padding: 0.5rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; flex: 1; min-width: 100px; }
         .stream-links a { display: inline-block; margin: 0.3rem 0.5rem 0.3rem 0; padding: 0.5rem 0.8rem; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.8rem; }
         .loading-text { color: var(--muted); text-align: center; padding: 1rem; }
+        .quality-selector { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
+        .quality-selector select { padding: 0.4rem; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
+        .error-msg { color: #ff6b6b; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -99,6 +102,7 @@
     let currentDetailData = null;
     let dashPlayer = null;
     let tvVideoElement = null;
+    let selectedQuality = '480p';
 
     function log(msg) {
         statusDiv.textContent += '\n' + msg;
@@ -196,6 +200,12 @@
         }
     }
 
+    function getProxyStreamUrl(se = 0, ep = 0, format = 'auto') {
+        let url = `${getApiBase()}/stream-proxy/${currentSubjectId}?detail_path=${encodeURIComponent(currentSlug)}&quality=${selectedQuality}&se=${se}&ep=${ep}`;
+        if (format !== 'auto') url += `&format=${format}`;
+        return url;
+    }
+
     function renderDetailPage(detail, stream) {
         if (dashPlayer) { dashPlayer.destroy(); dashPlayer = null; }
         if (tvVideoElement) {
@@ -214,8 +224,19 @@
         html += `<div style="color:var(--muted); margin-bottom:1rem;">${rating ? '⭐ ' + rating : ''}</div>`;
         if(desc) html += `<p>${desc}</p>`;
 
+        html += `
+        <div class="quality-selector">
+            <span>Quality:</span>
+            <select id="qualitySelect">
+                <option value="360p" ${selectedQuality==='360p'?'selected':''}>360p</option>
+                <option value="480p" ${selectedQuality==='480p'?'selected':''}>480p</option>
+                <option value="720p" ${selectedQuality==='720p'?'selected':''}>720p</option>
+                <option value="1080p" ${selectedQuality==='1080p'?'selected':''}>1080p</option>
+            </select>
+        </div>`;
+
         if (stream.detected_type === 'movie') {
-            if (stream.dash && stream.dash.length > 0) {
+            if (stream.has_resource && (stream.dash?.length || stream.sources?.length)) {
                 html += `<div id="dashPlayerContainer" class="movie-player-container" style="display:none;">
                     <video id="dashVideoElement" controls></video>
                 </div>`;
@@ -244,6 +265,7 @@
             html += `<div id="tvPlayerContainer" class="movie-player-container" style="display:none;">
                 <video id="tvVideoElement" controls></video>
             </div>`;
+            html += `<div id="tvPlayerError" class="error-msg" style="display:none;"></div>`;
         }
 
         html += '<div id="streamContainer">' + buildStreamLinks(stream) + '</div>';
@@ -252,15 +274,30 @@
 
         detailContentDiv.innerHTML = html;
 
-        if (stream.detected_type === 'movie' && stream.dash?.length) {
+        document.getElementById('qualitySelect').addEventListener('change', (e) => {
+            selectedQuality = e.target.value;
+            if (stream.detected_type === 'movie' && dashPlayer) {
+                const video = document.getElementById('dashVideoElement');
+                if (video) dashPlayer.attachSource(getProxyStreamUrl());
+            }
+            if (stream.detected_type === 'tv') {
+                const se = parseInt(document.getElementById('seasonSelect').value);
+                const ep = parseInt(document.getElementById('episodeSelect').value);
+                loadStreamForEpisode(se, ep);
+            }
+        });
+
+        if (stream.detected_type === 'movie' && (stream.dash?.length || stream.sources?.length)) {
             const playBtn = document.getElementById('playDashBtn');
             const container = document.getElementById('dashPlayerContainer');
             const video = document.getElementById('dashVideoElement');
             playBtn.addEventListener('click', () => {
                 if (!dashPlayer) {
                     dashPlayer = dashjs.MediaPlayer().create();
-                    dashPlayer.initialize(video, stream.dash[0].url, true);
-                } else video.play();
+                    dashPlayer.initialize(video, getProxyStreamUrl(), true);
+                } else {
+                    video.play();
+                }
                 container.style.display = 'block';
                 video.play();
             });
@@ -305,47 +342,124 @@
     }
 
     function buildStreamLinks(stream) {
-        let html = '<div class="stream-links"><strong>Direct links:</strong><br>';
+        let html = '<div class="stream-links"><strong>Available sources:</strong><br>';
         if(stream.has_resource && stream.sources?.length) {
             stream.sources.forEach(s => {
                 const sizeMB = (s.size/1e6).toFixed(0);
-                const linkUrl = stream.detected_type === 'tv' ? getApiBase() + '/proxy-stream?url=' + encodeURIComponent(s.url) : s.url;
-                html += `<div style="margin:0.3rem 0; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                    <a href="${linkUrl}" target="_blank" style="background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; text-decoration:none; font-size:0.8rem;">⬇ ${s.resolution} (${sizeMB}MB)</a>
-                    <a href="${linkUrl}" target="_blank" style="font-size:0.75rem; color:var(--accent);">(open)</a>
-                </div>`;
+                html += `<span style="margin:0.3rem 0; display:inline-block; background:#28a745; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">${s.resolution} (${sizeMB}MB)</span> `;
             });
-            stream.dash?.forEach(d => html += `<div style="margin:0.3rem 0;"><a href="${d.url}" target="_blank" style="font-size:0.8rem; color:var(--accent);">DASH ${d.resolutions} (${d.codecName})</a></div>`);
-        } else html += '<span style="color:var(--muted);">No stream available.</span>';
+            stream.dash?.forEach(d => {
+                html += `<span style="margin:0.3rem 0; display:inline-block; background:#3366ff; padding:0.4rem 0.8rem; border-radius:6px; color:#fff; font-size:0.8rem;">DASH ${d.resolutions} (${d.codecName})</span> `;
+            });
+        } else {
+            html += '<span style="color:var(--muted);">No stream available.</span>';
+        }
         html += '</div>';
         return html;
     }
 
+    function resetPlayer() {
+        if (dashPlayer) {
+            try { dashPlayer.destroy(); } catch(e) {}
+            dashPlayer = null;
+        }
+        const video = document.getElementById('tvVideoElement');
+        if (video) {
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            // clone to remove event listeners
+            const newVideo = video.cloneNode(true);
+            video.parentNode.replaceChild(newVideo, video);
+            newVideo.id = 'tvVideoElement';
+            tvVideoElement = newVideo;
+        }
+    }
+
     async function loadStreamForEpisode(se, ep) {
-        log(`Loading stream for S${se} E${ep}`);
+        log(`Loading stream for S${se} E${ep} at ${selectedQuality}`);
+        const container = document.getElementById('tvPlayerContainer');
+        const errorDiv = document.getElementById('tvPlayerError');
+        let video = document.getElementById('tvVideoElement');
+
+        if (!container || !video) {
+            log('Player container not found');
+            return;
+        }
+
+        // Reset everything
+        resetPlayer();
+        video = document.getElementById('tvVideoElement');
+        container.style.display = 'none';
+        if (errorDiv) errorDiv.style.display = 'none';
+
         try {
             const stream = await fetchJSON(`/api/stream/${currentSubjectId}?detail_path=${currentSlug}&se=${se}&ep=${ep}`);
-
-            const container = document.getElementById('tvPlayerContainer');
-            const video = document.getElementById('tvVideoElement');
-            if (container && video && stream.has_resource && stream.sources.length > 0) {
-                const firstSource = stream.sources[0];
-                const proxyUrl = getApiBase() + '/proxy-stream?url=' + encodeURIComponent(firstSource.url);
-                video.src = proxyUrl;
-                container.style.display = 'block';
-                video.play();
-                tvVideoElement = video;
-            } else if (container) {
-                container.style.display = 'none';
+            // Log full stream data for debugging
+            log(`Stream data: hasResource=${stream.has_resource}, MP4 count=${stream.sources?.length||0}, DASH count=${stream.dash?.length||0}`);
+            if (stream.dash?.length > 0) {
+                log(`First DASH url: ${stream.dash[0].url}`);
             }
 
-            const linksContainer = document.getElementById('streamContainer');
-            if (linksContainer) {
-                linksContainer.innerHTML = buildStreamLinks(stream);
+            if (!stream.has_resource || (stream.sources.length === 0 && stream.dash.length === 0)) {
+                log('No playable source for this episode.');
+                return;
+            }
+
+            // Decide which format to use: prefer DASH, fallback to MP4
+            if (stream.dash && stream.dash.length > 0) {
+                const proxyUrl = getProxyStreamUrl(se, ep, 'dash');
+                log('Using DASH: ' + proxyUrl);
+                dashPlayer = dashjs.MediaPlayer().create();
+                dashPlayer.initialize(video, proxyUrl, true);
+                dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e) => {
+                    log('Dash.js error: ' + JSON.stringify(e.error));
+                    if (errorDiv) {
+                        errorDiv.style.display = 'block';
+                        errorDiv.textContent = 'DASH playback error. Trying MP4 fallback...';
+                    }
+                    // Fallback to MP4
+                    loadStreamWithMP4(se, ep, stream);
+                });
+                container.style.display = 'block';
+                video.play().catch(() => log('Autoplay blocked – press play'));
+                tvVideoElement = video;
+            } else if (stream.sources && stream.sources.length > 0) {
+                // No DASH, use MP4 directly
+                loadStreamWithMP4(se, ep, stream);
             }
         } catch(e) {
             log('Failed to load episode: ' + e.message);
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Error: ' + e.message;
+            }
         }
+    }
+
+    async function loadStreamWithMP4(se, ep, stream) {
+        const container = document.getElementById('tvPlayerContainer');
+        const errorDiv = document.getElementById('tvPlayerError');
+        const video = document.getElementById('tvVideoElement');
+        if (!video) return;
+
+        const proxyUrl = getProxyStreamUrl(se, ep, 'mp4');
+        log('Using MP4: ' + proxyUrl);
+        video.src = proxyUrl;
+        container.style.display = 'block';
+        video.play().catch(() => {});
+        tvVideoElement = video;
+
+        video.onerror = () => {
+            const err = video.error;
+            const msgs = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
+            const msg = msgs[err?.code] || 'Unknown';
+            log(`MP4 error: ${msg}`);
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = `MP4 playback failed (${msg}). The stream may not be available.`;
+            }
+        };
     }
 
     function handleHashChange() {
